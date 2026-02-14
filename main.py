@@ -207,7 +207,7 @@ class _6502:
         # 1: 1 flag, no use at all, pushes to one by default, 0x20
         # O: Overflow flag, turns on if two negative numbers add to a positive or vice versa, 0x40
         # N: Negative flag, turns on if the result of a mathematical addition or subtraction could be negative when using two's complement, 0x80
-        self.Flag['F'] = on
+        self.Flag[F] = on
 
     #EACH INSTRUCTION HAS A SPECIFIC NUMBER OF FLAGS THAT ITS CAPABLE OF TURNING ON OR OFF DEPENDING ON THE RESULT. I HAVE MENTIONED ALL THE FLAGS NEXT TO EACH INSTRUCTION
     #HERE ARE THE ACTUAL INSTRUCTIONS
@@ -232,5 +232,7 @@ class _6502:
         #OKAY, THIS ONE'S A DOOZY...HOW DO WE CHECK FOR OVERFLOW? WELL, OVERFLOW OCCURS IN ONE OF TWO CASES, BOTH ASSUMING TWO'S COMPLEMENT LOGIC:
         #1. YOU ADDED TWO POSITIVE NUMBERS, BUT ENDED UP GETTING A NEGATIVE NUMBER
         #2. YOU ADDED TWO NEGATIVE NUMBERS, BUT ENDED UP GETTING A POSITIVE NUMBER
+        # AFTER SOME THINKING I HAVE FIGURED OUT A LOGICAL EXPRESSION...
         # NOT(A XOR B) AND ((A&B) XOR C) WHERE A AND B ARE THE MSB OF THE ACC AND RAM, AND C IS THE MSB OF THE RESULT OF THE ADDITION
+        self.SetSignal('v', 0x0080 & (~(self.ACC ^ self.addr ) & ((self.ACC & self.addr) ^ val))) #AND WITH 0x0080 LIMITS IT TO THE MSB
 
