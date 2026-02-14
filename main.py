@@ -49,7 +49,8 @@ class _6502:
         self.SP = 0xFD #SP GOES FROM 0x00 TO 0xFF, BUT WHEN RESETTING RUNS A FEW DUMMY CYCLES BRINGING THE SP DOWN A COUPLE NOTCHES, WHICH IS WHY ITS FD AND NOT FF
 
         self.SR = 0x20 #CORRESPONDS TO BIT 5, WHICH IS UNUSED AND ALWAYS PUSHES TO 1
-
+        self.Flag = {'C': False, 'Z': False, 'I': False, 'D': False, 'B': False, 1: True, 'V': False, 'N': False} #A VARIABLE TO STORE WHAT FLAGS ARE SET AT ANY INSTANT....
+        #...IF THEY ARE SET THEY WILL BE TRUE, ELSE THEY WILL BE FALSE
         self.RAM = bytearray(65536) #RAM HAS A FULL ADDRESSABLE RANGE OF 64KB, SO BETWEEN 0x0000 and 0xFFFF. IT'S CHOPPED UP IN WEIRD WAYS THOUGH, LIKE THE FIRST TWO KB MIRROR THREE MORE TIMES
         self.addr = 0x0000
         self.PC = AssembleByte(self.RAM[0xFFFC], self.RAM[0xFFFD]) #THIS IS WHERE THE RESET POSITION FOR THE PC IS LOCATED. USUALLY IT'S EQUAL TO 0x8000 BUT ITS MORE...
@@ -195,11 +196,36 @@ class _6502:
     def irq(self): return #AN INTERRUPT REQUEST SIGNAL
     def nmi(self): return  #A NON MASKABLE INTERRUPT. THESE ONES CAN NEVER BE IGNORED, UNLIKE THE REGULAR IRQs
 
+
+    def SetSignal(self, F : str, on : bool):    #WE WILL DEFINE WHAT ALL THE BITS IN THE STATUS FLAG CORRESPOND TO
+        #HERE ARE ALL THE FLAGS IN ORDER
+        # C: Carry, turns on if a carry must be performed, 0x01
+        # Z: Zero Flag, turns on if the result of a calculation was zero, 0x02
+        # I: Interrupt Disable, turns on to trigger interrupt ignore for regular IRQ, 0x04
+        # D: Decimal, not actually used in the NES but still there for some reason, 0x08
+        # B: B flag, doesnt actually do anything in the CPU but is useful to some software, 0x10
+        # 1: 1 flag, no use at all, pushes to one by default, 0x20
+        # O: Overflow flag, turns on if two negative numbers add to a positive or vice versa, 0x40
+        # N: Negative flag, turns on if the result of a mathematical addition or subtraction could be negative when using two's complement, 0x80
+
+        self.Flag['F'] = on
+        #BASICALLY, ALL THE BITS WOULD HAVE TO BE ANDED WITH THEIR EQUIVALENT 'ON' RESULTS TO SEE IF THEY ARE ON (BECAUSE ONLY THEN WOULD THE RESULT BE GREATER THAN 0)
+       # self.Flag['C'] = True if self.SR & 0x01 else False
+       # self.Flag['Z'] = True if self.SR & 0x02 else False
+       # self.Flag['I'] = True if self.SR & 0x04 else False
+       # self.Flag['D'] = True if self.SR & 0x08 else False
+       # self.Flag['B'] = True if self.SR & 0x10 else False
+       # self.Flag['V'] = True if self.SR & 0x40 else False
+       # self.Flag['N'] = True if self.SR & 0x80 else False
+
+
+
+
     #HERE ARE THE ACTUAL INSTRUCTIONS
     def ADC(self): #ADD WITH CARRY. ADDS TO THE ACCUMULATOR SOME ADDRESS FROM MEMORY PLUS THE CARRY BIT. USES TWO's COMPLEMENT AND CHECKS FOR OVERFLOW
         #THIS FUNCTION IS BY FAR THE BIGGEST PAIN IN THE ASS TO FIGURE OUT
 
         self.fetch()
-
+        val = self.addr + self.ACC + (self.Flag['C']) #NEEDS TO ADD THE VALUE OF THE CARRY
 
 
