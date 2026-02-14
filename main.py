@@ -189,6 +189,7 @@ class _6502:
         #data = self.addr
         self.PC += Size
         #return data
+        return Mode #sometimes we need to check if the ACC was used
     def clock(self): #A FUNCTION TELLING THE CPU THAT ONE CLOCK CYCLE HAS OCCURED
         return
     def reset(self): #THAT RESET VECTOR I WAS TALKING ABOUT EARLIER
@@ -254,3 +255,25 @@ class _6502:
         self.SetSignal('v', 0x0080 & ((self.ACC ^ self.addr) & ((self.ACC & self.addr) ^ val))) #HERE, IT IS THE SAME EXCEPT THE NOT FROM THE XOR IS REMOVED BECAUSE...
         #...OVERFLOW IN SUBTRACTION CAN ONLY OCCUR WHEN BOTH NUMBERS HAVE *DIFFERENT* MSBs, WHICH IS BECAUSE SUBTRACTING A FROM B IS THE SAME THING AS ADDING THE...
         #...COMPLEMENT OF A FROM B. SO, SUBTRACTING DIFFERENT MSBs BECOMES THE SAME AS ADDING THE SAME MSBs
+    def AND(self): #BITWISE AND. Z, N
+        self.fetch()
+        self.ACC = self.ACC & self.addr
+        self.SetSignal('N', self.ACC > 127)
+        self.SetSignal('Z', self.ACC & 0x00FF == 0)
+    def LSL(self): #LOGICAL LEFT SHIFT TO EITHER ACC OR VALUE. C, Z, N
+        mode = self.fetch()
+        if mode == 'ACC':
+            #THE CARRY IS SET IF THE INITIAL VALUE HAD BIT 7 ON
+            self.SetSignal('C', self.ACC > 127)
+            self.ACC = self.ACC << 1
+            #THE NEGATIVE IS SET IF THE NEW BIT-SHIFTED VALUE HAS BIT 7 ON
+            self.SetSignal('N', self.ACC > 127)
+
+        else:
+            self.SetSignal('C', self.addr > 127)
+            self.addr = self.addr << 1
+            self.SetSignal('N', self.addr > 127)
+    def BCC(self): #BRANCH IF CARRY CLEAR. INCREMENTS THE PC BY 2 PLUS THE RELATIVE OFFSET IF THE CARRY IS CLEAR
+        self.fetch() #THIS ALREADY INCREMENTS THE PC BY 2 SINCE WE INCREMENT BY INSTRUCTION LENGTH WHEN FETCHING
+        self.PC += self.addr #THIS ONLY USES RELATIVE MODE, SO THE ADDRESS IS CONVERTED TO SIGNED BEFOREHAND (SEE REL())
+
