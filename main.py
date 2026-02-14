@@ -47,7 +47,7 @@ class _6502:
         self.IXY = 0
         #THE STACK ITSELF OPERATES BETWEEN 0x0100 AND 0x01FF, THE STACK POINTER COUNTS BACKWARDS FROM 0xFF TO 0x00 AND IS ADDED TO 0x100 TO FETCH FROM THE STACK
         self.SP = 0xFD #SP GOES FROM 0x00 TO 0xFF, BUT WHEN RESETTING RUNS A FEW DUMMY CYCLES BRINGING THE SP DOWN A COUPLE NOTCHES, WHICH IS WHY ITS FD AND NOT FF
-
+        self.INDEX = 0 #NEED THIS FOR SPECIFIC PURPOSES WHEN MEMORY LOCATIONS THEMSELVES ARE DIRECTLY MODIFIED
         self.SR = 0x20 #CORRESPONDS TO BIT 5, WHICH IS UNUSED AND ALWAYS PUSHES TO 1
         self.Flag = {'C': False, 'Z': False, 'I': False, 'D': False, 'B': False, 1: True, 'V': False, 'N': False} #A VARIABLE TO STORE WHAT FLAGS ARE SET AT ANY INSTANT....
         #...IF THEY ARE SET THEY WILL BE TRUE, ELSE THEY WILL BE FALSE
@@ -96,6 +96,7 @@ class _6502:
     def read(self, mode):
         Mode = self.UseMode(mode)
         self.addr = self.ACC if Mode == -1 else self.RAM[Mode]
+        return Mode #RETURNING THE INDEX OF RAM WE CHECK AT FOR THE SAKE OF WRITING CHANGES DIRECTLY TO MEMORY
     def write(self, mode, data):
         Mode = self.UseMode(mode)
         self.ACC = data if Mode == -1 else self.RAM[Mode] = data
@@ -178,7 +179,7 @@ class _6502:
         #...INSTRUCTION HAS & INCREMENTING BY THAT MUCH AT THE END OF FETCHING THE DATA, BUT IT'S NOT ENTIRELY ACCURATE TO HOW THE 6502 DOES THINGS EXACTLY. I DONT KNOW IF...
         #...THE TECHNICAL LACK OF CYCLE-ACCURACY HERE WILL END UP HURTING THINGS LATER ON, BUT I WILL KEEP IT LIKE THIS FOR NOW...I FEEL LIKE IT WOULD ONLY MATTER IN SOME...
         #...WEIRD EDGE-CASES I AM NOT YET PRIVY TO.
-        self.read(Mode) #NOW THAT WE HAVE THE MODE, WE RUN IT THROUGH READ TO SET SELF.ADDR TO THE OPERAND
+        self.INDEX = self.read(Mode) #NOW THAT WE HAVE THE MODE, WE RUN IT THROUGH READ TO SET SELF.ADDR TO THE OPERAND, THE INDEX VARIABLE STORES THE RETURN INDEX OF INSTRUCTION
         #data = self.addr
         self.PC += Size
         #return data
@@ -365,3 +366,9 @@ class _6502:
         self.SetSignal('C', val >= 0)
         self.SetSignal('Z', val == 0)
         self.SetSignal('N', val < 0)
+    def DEC(self):#DECREMENT MEMORY. SUBTRACT ONE FROM A MEMORY LOCATION. Z. N
+
+        self.fetch()
+        self.RAM[self.INDEX] -= 1 #self.INDEX stores the index of memory where self.addr is located. We need to do this since we're changing the memory contents directly
+        self.SetSignal('Z', self.addr - 1 == 0)
+        self.SetSignal('N', (self.addr - 1 < 0))
