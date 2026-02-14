@@ -57,6 +57,7 @@ class _6502:
         self.PC = AssembleByte(self.RAM[0xFFFC], self.RAM[0xFFFD]) #THIS IS WHERE THE RESET POSITION FOR THE PC IS LOCATED. USUALLY IT'S EQUAL TO 0x8000 BUT ITS MORE...
         #...INTELLIGENT TO MATHEMATICALLY CALCULATE IT LIKE THE 6502 DID SINCE ITS NOT ACTUALLY A HARD-CODED THING, SO THERE COULD BE A WEIRD CASE WHERE IT DOES NOT...
         #...RESET TO 0x8000
+        self.cycle = -1 #A VARIABLE COUNTING DOWN ON THE NUMBER OF CLOCK CYCLES LEFT ON AN INSTRUCTION. NEEDED TO KNOW WHEN IT CAN LEGALLY MOVE ON TO THE NEXT INSTRUCTION
 
 
 
@@ -100,7 +101,11 @@ class _6502:
         return Mode #RETURNING THE INDEX OF RAM WE CHECK AT FOR THE SAKE OF WRITING CHANGES DIRECTLY TO MEMORY
     def write(self, data):
        # Mode = self.UseMode(mode)
-        self.ACC = data if self.INDEX == -1 else self.RAM[self.INDEX] = data #WRITES AT THE CURRENT INDEX BEFORE THE PC INCREMENTS
+       if self.INDEX == -1:
+           self.ACC = data
+       else:
+           self.RAM[self.INDEX] = data
+    #WRITES AT THE CURRENT INDEX BEFORE THE PC INCREMENTS
 
     #OKAY, THIS IS IMPORTANT. WE NEED TO WORK ON ALL THE ADDRESSING MODES. THE NES HAS APPROXIMATELY ONE BAJILLION OF THEM
     #FOR THIS, WE NEED TO UNDERSTAND OPCODE STRUCTURE. IT'S BASICALLY AAABBBCC, WHERE BBB TELLS YOU THE ADDRESSING MODE.
@@ -172,10 +177,10 @@ class _6502:
     #BEFORE WE DO ANYTHING HERE THOUGH, THE 6502 NEEDS A FEW THINGS TO BE ABLE TO PERFORM THESE AT ALL
     #THIS GETS THE DATA WE'RE WORKING WITH FOR AN OPCODE
     def fetch(self):
-        opcode = self.PC
+        opcode = self.RAM[self.PC]
         #self.PC += 1
-        Mode = operations[opcode[1]]
-        Size = operations[opcode[2]] #OKAY, IMPORTANT CAVEAT: THE 6502 INCREMENTS PC PER BYTE FETCHED. THAT MEANS IT INCREMENTS WHEN IT GETS THE OPCODE, AND...
+        Mode = operations[opcode][1]
+        Size = operations[opcode][2] #OKAY, IMPORTANT CAVEAT: THE 6502 INCREMENTS PC PER BYTE FETCHED. THAT MEANS IT INCREMENTS WHEN IT GETS THE OPCODE, AND...
         #...INCREMENTS ONCE FOR EVERY BYTE OF THE OPERAND ONCE IT GETS IT. HOWEVER, I'VE DECIDED TO GET DATA FROM THE ADDRESSING MODES BY LOOKING AHEAD BY AN OFFSET THAT IS...
         #...RELATIVE TO THE PC. THIS MAKES THE ASSUMPTION THAT THE PC IS ANCHORED AT THE OPCODE. THAT HAS AN EASY WORKAROUND OF SIMPLY GETTING THE NUMBER OF BYTES THAT THE...
         #...INSTRUCTION HAS & INCREMENTING BY THAT MUCH AT THE END OF FETCHING THE DATA, BUT IT'S NOT ENTIRELY ACCURATE TO HOW THE 6502 DOES THINGS EXACTLY. I DONT KNOW IF...
@@ -186,8 +191,13 @@ class _6502:
         self.PC += Size
         #return data
         return Mode #sometimes we need to check if the ACC was used
-    def clock(self): #A FUNCTION TELLING THE CPU THAT ONE CLOCK CYCLE HAS OCCURED
-        return
+    def clock(self):
+        opcode =self.RAM[self.PC] #A FUNCTION TELLING THE CPU THAT ONE CLOCK CYCLE HAS PASSED
+        if self.cycle == 0:
+            self.PC += 1 #INCREMENT THE COUNTER, THE INSTRUCTION HAS BEEN COMPLETED IF CYCLES IS ZERO
+            self.cycle = operations[opcode][3]
+        elif self.cycle > 0:
+            self.cycle -= 1
     def reset(self): #THAT RESET VECTOR I WAS TALKING ABOUT EARLIER
         return
     def irq(self): return #AN INTERRUPT REQUEST SIGNAL
@@ -202,6 +212,7 @@ class _6502:
     def Pop(self):
         self.SP += 1
         return self.RAM[self.SP | 0x100]
+
     #A SIMPLE FUNCTION TO TURN A SPECIFIC FLAG ON OR OFF WHEN CALLED
     def SetSignal(self, F, on):    #WE WILL DEFINE WHAT ALL THE BITS IN THE STATUS FLAG CORRESPOND TO
         #HERE ARE ALL THE FLAGS IN ORDER
@@ -213,7 +224,7 @@ class _6502:
         # 1: 1 flag, no use at all, pushes to one by default, 0x20
         # O: Overflow flag, turns on if two negative numbers add to a positive or vice versa, 0x40
         # N: Negative flag, turns on if the result of a mathematical addition or subtraction could be negative when using two's complement, 0x80
-        self.Flag[F] = on
+        self.Flag[F] = (on == 1)
 
     #EACH INSTRUCTION HAS A SPECIFIC NUMBER OF FLAGS THAT ITS CAPABLE OF TURNING ON OR OFF DEPENDING ON THE RESULT. I HAVE MENTIONED ALL THE FLAGS NEXT TO EACH INSTRUCTION
     #HERE ARE THE ACTUAL INSTRUCTIONS
@@ -250,7 +261,7 @@ class _6502:
         #2. YOU ADDED TWO NEGATIVE NUMBERS, BUT ENDED UP GETTING A POSITIVE NUMBER
         # AFTER SOME THINKING I HAVE FIGURED OUT A LOGICAL EXPRESSION...
         # NOT(A XOR B) AND ((A&B) XOR C) WHERE A AND B ARE THE MSB OF THE ACC AND RAM, AND C IS THE MSB OF THE RESULT OF THE ADDITION
-        self.SetSignal('v', 0x0080 & (~(self.ACC ^ self.addr ) & ((self.ACC & self.addr) ^ val))) #AND WITH 0x0080 LIMITS IT TO THE MSB
+        self.SetSignal('V', 0x0080 & (~(self.ACC ^ self.addr ) & ((self.ACC & self.addr) ^ val))) #AND WITH 0x0080 LIMITS IT TO THE MSB
         #OKAY, WHY DID THAT WORK? BASICALLY: WHEN YOU HAVE TWO POSITIVE NUMBERS ADDED TOGETHER IN TWO'S COMPLEMENT, BOTH OF THEIR MSBs ARE 0. IF THE RESULTING NUMBER IS...
         #...NEGATIVE, ITS MSB IS 1, AND THE OPPOSITE IS ALSO TRUE. THAT MEANS OVERFLOW OCCURS WHEN THE MSB OF THE NUMBERS YOU ADD IS DIFFERENT FROM THE RESULT, HENCE...
         #...((A AND B) XOR C). THE ONLY PROBLEM WITH THIS EXPRESSION IS THAT IT CAN TRIGGER TRUE WHEN A AND B ARE DIFFERENT FROM EACH OTHER, BUT IT SHOULD NEVER BE TRUE...
@@ -267,27 +278,27 @@ class _6502:
         self.SetSignal('C', val < 0x0000) #IT COULD NEVER REACH THE UPPER LIMIT OF 255, SO HERE A CARRY OCCURS WHEN IT REACHES THE LOWER LIMIT OF 0
         self.SetSignal('Z', val & 0x00FF == 0)
         self.SetSignal('N', val > 127)
-        self.SetSignal('v', 0x0080 & ((self.ACC ^ self.addr) & ((self.ACC & self.addr) ^ val))) #HERE, IT IS THE SAME EXCEPT THE NOT FROM THE XOR IS REMOVED BECAUSE...
+        self.SetSignal('V', 0x0080 & ((self.ACC ^ self.addr) & ((self.ACC & self.addr) ^ val))) #HERE, IT IS THE SAME EXCEPT THE NOT FROM THE XOR IS REMOVED BECAUSE...
         #...OVERFLOW IN SUBTRACTION CAN ONLY OCCUR WHEN BOTH NUMBERS HAVE *DIFFERENT* MSBs, WHICH IS BECAUSE SUBTRACTING A FROM B IS THE SAME THING AS ADDING THE...
         #...COMPLEMENT OF A FROM B. SO, SUBTRACTING DIFFERENT MSBs BECOMES THE SAME AS ADDING THE SAME MSBs
     def AND(self): #BITWISE AND. Z, N
         self.fetch()
         self.ACC = self.ACC & self.addr
-        self.SetSignal('N', self.ACC > 127)
+        self.SetSignal('N', self.ACC & 0x80 != 0)
         self.SetSignal('Z', self.ACC & 0x00FF == 0)
     def LSL(self): #LOGICAL LEFT SHIFT TO EITHER ACC OR VALUE. C, Z, N
         mode = self.fetch()
         if mode == 'ACC':
             #THE CARRY IS SET IF THE INITIAL VALUE HAD BIT 7 ON
-            self.SetSignal('C', self.ACC > 127)
+            self.SetSignal('C', self.ACC & 0x80 != 0)
             self.ACC = self.ACC << 1
             #THE NEGATIVE IS SET IF THE NEW BIT-SHIFTED VALUE HAS BIT 7 ON
-            self.SetSignal('N', self.ACC > 127)
+            self.SetSignal('N', self.ACC & 0x80 != 0)
 
         else:
-            self.SetSignal('C', self.addr > 127)
+            self.SetSignal('C', self.addr & 0x80 != 0)
             self.addr = self.addr << 1
-            self.SetSignal('N', self.addr > 127)
+            self.SetSignal('N', self.addr & 0x80 != 0)
     def BCC(self):
         if not self.Flag['C']:  #BRANCH IF CARRY CLEAR. INCREMENTS THE PC BY 2 PLUS THE RELATIVE OFFSET IF THE CARRY IS CLEAR
             self.fetch() #THIS ALREADY INCREMENTS THE PC BY 2 SINCE WE INCREMENT BY INSTRUCTION LENGTH WHEN FETCHING
@@ -305,7 +316,7 @@ class _6502:
         self.fetch()
         self.SetSignal('Z', ~(self.ACC & self.addr))
         self.SetSignal('N', (self.addr & 0x0080))
-        self.SetSignal('v', (self.addr & 0x0040))
+        self.SetSignal('V', (self.addr & 0x0040))
     def BMI(self): #BRANCH IF MINUS. SAME AS THE PREVIOUS BRANCHES FOR THE NEGATIVE FLAG
         if self.Flag['N']:
             self.fetch()
@@ -321,8 +332,8 @@ class _6502:
     def BRK(self): #BREAK (ALSO KNOWN AS A SOFTWARE IRQ). I, B.
         #THIS ONE'S INTERESTING. WE PUSH THE INCREMENTED PROGRAM COUNTER TO THE STACK AND THEN PUSH ALL THE FLAGS TO THE STACK, AFTER WHICH WE SET THE PC TO A SPECIFIC VALUE
         self.fetch()
-        self.Push(self.PC * 0xFF00) #GETS THE HIGH BYTE FIRST
-        self.Push(self.PC * 0x00FF) #GETS THE LOW BYTE SECOND
+        self.Push((self.PC >> 8) & 0xFF) #GETS THE HIGH BYTE FIRST
+        self.Push(self.PC & 0xFF) #GETS THE LOW BYTE SECOND
         #WE PUSH IT IN LITTLE ENDIAN WHEN THE MEMORY HOLDS BIG ENDIAN, BUT IT WORKS OUT SINCE THE STACK COUNTS BACKWARDS
         self.Push(self.MakeSF())
         #INTERRUPT DISABLE AND B IS SET TO 1 AFTER PUSHING
@@ -373,65 +384,65 @@ class _6502:
         self.fetch()
         self.write(self.addr - 1)
         self.SetSignal('Z', self.addr - 1 == 0)
-        self.SetSignal('N', (self.addr - 1 > 127))
+        self.SetSignal('N', ((self.addr - 1) & 0x80 != -))
     def DEX(self): #DECREMENT X. SAME THING BUT FOR THE X REGISTER. Z, N
         self.fetch()
         self.IXX -= 1
         self.SetSignal('Z', self.IXX== 0)
-        self.SetSignal('N', (self.IXX < 0))
+        self.SetSignal('N', (self.IXX & 0x80 != 0))
     def DEY(self): #DECREMENT Y. SAME THING BUT FOR THE Y REGISTER. Z, N
         self.fetch()
         self.IXY -= 1
         self.SetSignal('Z', self.IXY== 0)
-        self.SetSignal('N', (self.IXY < 0))
+        self.SetSignal('N', (self.IXY & 0x80 != 0))
     def EOR(self): #EXCLUSIVE OR. EORs BETWEEN ACC AND ADDR, SETTING REGISTERS APPROPRIATELY. Z,N.
         self.fetch()
         self.ACC = self.ACC ^ self.addr
         self.SetSignal('Z', self.ACC == 0)
-        self.SetSignal('N', self.ACC > 127)
+        self.SetSignal('N', self.ACC &0x80 != -)
     def INC(self): #INCREMENT MEMORY. ADD ONE TO A MEMORY LOCATION. WRITES BACK TO MEMORY/ ACC. Z, N.
         self.fetch()
         self.write(self.addr + 1)
         self.SetSignal('Z', self.addr +1 == 0)
-        self.SetSignal('N', (self.addr+ 1 > 127))
+        self.SetSignal('N', ((self.addr+ 1) & 0x80!= 0))
     def INX(self): #INCREMENT X. SAME THING BUT FOR THE X REGISTER. Z, N.
         self.fetch()
         self.IXX += 1
         self.SetSignal('Z', self.IXX == 0)
-        self.SetSignal('N', (self.IXX < 0))
+        self.SetSignal('N', (self.IXX & 0x80 != 0))
 
     def INY(self):  # DECREMENT Y. SAME THING BUT FOR THE Y REGISTER. Z, N
         self.fetch()
         self.IXY += 1
         self.SetSignal('Z', self.IXY == 0)
-        self.SetSignal('N', (self.IXY < 0))
+        self.SetSignal('N', (self.IXY & 0x80 != 0))
 
     def JMP(self): #JUMP. PROGRAM COUNTER IS EQUAL TO THE SELF.ADDR.
         self.fetch()
         self.PC = self.addr
     def JSR(self): #JUMP TO SUBROUTINE. PUSHES CURRENT PC TO STACK THEN SETS IT TO SELF.ADDR. USED WHEN YOU WANT TO BE ABLE TO GO BACK FROM WHERE YOU JUMPED.
         self.fetch()
-        self.Push(self.PC& 0xFF00)
-        self.Push(self.PC & 0x00FF)
+        self.Push((self.PC<< 8)& 0xFF)
+        self.Push(self.PC & 0xFF)
         self.PC = self.addr
     def LDA(self): #LOAD A. LOADS SELF.ADDR INTO ACC. Z, N.
         self.fetch()
         self.ACC = self.addr
         self.SetSignal('Z', self.ACC == 0)
-        self.SetSignal('N', self.ACC > 127)
+        self.SetSignal('N', self.ACC & 0x80 !=0)
     def LDX(self): #LOAD Y. LOADS SELF.ADDR INTO Y. Z, N.
         self.fetch()
         self.IXX = self.addr
         self.SetSignal('Z', self.IXX == 0)
-        self.SetSignal('N', self.IXX > 127)
+        self.SetSignal('N', self.IXX & 0x80 !=0)
     def LDY(self): #LOAD Y. LOADS SELF.ADDR INTO Y. Z, N.
         self.fetch()
         self.IXY = self.addr
         self.SetSignal('Z', self.IXY == 0)
-        self.SetSignal('N', self.IXY > 127)
+        self.SetSignal('N', self.IXY &0x80 != 0)
     def LSR(self): #LOGICAL SHIFT TO THE RIGHT. WRITES BACK TO MEMORY/ACC. C, Z, N. Carry becomes bit 0
         self.fetch()
-        self.SetSignal('C', self.addr & 0x01 > 0)
+        self.SetSignal('C', self.addr & 0x01 != 0)
         self.SetSignal('N', False)
         self.addr = self.addr >> 1
         self.SetSignal('Z', self.addr == 0)
@@ -443,7 +454,7 @@ class _6502:
         self.fetch()
         self.ACC = self.addr | self.ACC
         self.SetSignal('Z', self.ACC == 0)
-        self.SetSignal('N', self.ACC > 127)
+        self.SetSignal('N', self.ACC & 0x80 !=0)
     def PHA(self): #PUSH A. SIMPLY PUSHES ACC TO THE STACK
         self.fetch()
         self.Push(self.ACC)
@@ -455,7 +466,7 @@ class _6502:
         self.fetch()
         self.ACC = self.Pop()
         self.SetSignal('Z', self.ACC == 0)
-        self.SetSignal('N', self.ACC > 127)
+        self.SetSignal('N', self.ACC & 0x80 !=0)
     def PLP(self): #PULL PROCESSOR STATUS. POPS FROM THE STACK AND LOADS INTO THE STATUS FLAGS. ALL THE FLAGS
         #NOTE THAT THE VALUE OF I CHANGING WILL TAKE EFFECT IN THE NEXT CYCLE, NOT IMMEDIATELY. IMPLEMENT THIS!!!
         self.fetch()
@@ -467,9 +478,9 @@ class _6502:
         temp = self.addr << 1
         temp = temp + self.Flag['C'] #CARRY SHIFTED INTO BIT 0
 
-        self.SetSignal('C', self.addr & 0x0080 > 0) #CARRY EQUAL TO BIT 7
+        self.SetSignal('C', self.addr & 0x0080 != 0) #CARRY EQUAL TO BIT 7
 
-        self.SetSignal('N', temp > 127)
+        self.SetSignal('N', temp & 0x80 !=0)
         self.SetSignal('Z', temp == 0)
         self.write(temp)
     def ROR(self): #SHIFTS ACC/ADDR TO THE RIGHT. SAME THING BUT THE OTHER WAY AROUND. C, Z, N.
@@ -477,9 +488,9 @@ class _6502:
         temp = self.addr >> 1
         temp = temp + (self.Flag['C'] << 7)  # CARRY SHIFTED INTO BIT 7
 
-        self.SetSignal('C', self.addr & 0x01 > 0)  # CARRY EQUAL TO BIT 0
+        self.SetSignal('C', self.addr & 0x01 != 0)  # CARRY EQUAL TO BIT 0
 
-        self.SetSignal('N', temp > 127)
+        self.SetSignal('N', temp & 0x80 !=0)
         self.SetSignal('Z', temp == 0)
         self.write(temp)
     def RTI(self): #RETURN FROM INTERRUPT. POPS THE STATUS FLAGS FROM THE STACK, THEN POPS THE PC
