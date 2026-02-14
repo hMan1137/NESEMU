@@ -57,14 +57,7 @@ class _6502:
         #...INTELLIGENT TO MATHEMATICALLY CALCULATE IT LIKE THE 6502 DID SINCE ITS NOT ACTUALLY A HARD-CODED THING, SO THERE COULD BE A WEIRD CASE WHERE IT DOES NOT...
         #...RESET TO 0x8000
 
-    #JUST SIMPLE MODULES TO PUSH AND POP FROM THE STACK
-    def Push(self, data):
-        self.RAM[self.SP | 0x100] = data
-        #SP COUNTS BACKWARDS SO IT DECREMENTS
-        self.SP -= 1
-    def Pop(self):
-        self.SP += 1
-        return self.RAM[self.SP | 0x100]
+
 
     #A DETERMINER FUNCTION FOR KNOWING WHAT ADDRESS MODE WE'RE WORKING WITH AND THUS PERFORMING THE APPROPRIATE ADDRESSING MODE FUNCTION. THE ADDRESSING MODES ARE DEALT WITH...
     #...A LITTLE LATER
@@ -197,6 +190,15 @@ class _6502:
     def irq(self): return #AN INTERRUPT REQUEST SIGNAL
     def nmi(self): return  #A NON MASKABLE INTERRUPT. THESE ONES CAN NEVER BE IGNORED, UNLIKE THE REGULAR IRQs
 
+    # JUST SIMPLE MODULES TO PUSH AND POP FROM THE STACK
+    def Push(self, data):
+        self.RAM[self.SP | 0x100] = data
+        # SP COUNTS BACKWARDS SO IT DECREMENTS
+        self.SP -= 1
+
+    def Pop(self):
+        self.SP += 1
+        return self.RAM[self.SP | 0x100]
     #A SIMPLE FUNCTION TO TURN A SPECIFIC FLAG ON OR OFF WHEN CALLED
     def SetSignal(self, F : str, on : bool):    #WE WILL DEFINE WHAT ALL THE BITS IN THE STATUS FLAG CORRESPOND TO
         #HERE ARE ALL THE FLAGS IN ORDER
@@ -212,7 +214,17 @@ class _6502:
 
     #EACH INSTRUCTION HAS A SPECIFIC NUMBER OF FLAGS THAT ITS CAPABLE OF TURNING ON OR OFF DEPENDING ON THE RESULT. I HAVE MENTIONED ALL THE FLAGS NEXT TO EACH INSTRUCTION
     #HERE ARE THE ACTUAL INSTRUCTIONS
-
+    def MakeSF(self): #GENERATES A STATUS FLAG BYTE BASED ON THE FLAGS THAT ARE ON OR OFF. THIS IS SOMETIMES NEEDED IN CERTAIN INSTRUCTIONS
+        return 0x80 * self.Flag['N'] + 0x40 * self.Flag['V'] + 0x20 * self.Flag[1] + 0x10 * self.Flag['B'] + 0x08 * self.Flag['D'] + 0x04 * self.Flag['I'] + 0x02 * self.Flag['Z'] + 0x01 * self.Flag['C']
+    def BreakSF(self, byte): #GENERATES STATUS FLAGS FROM A STATUS FLAG BYTE
+        self.SetSignal('C', byte & 0x01 > 0)
+        self.SetSignal('Z', byte & 0x02 > 0)
+        self.SetSignal('I', byte & 0x04 > 0)
+        self.SetSignal('D', byte & 0x08 > 0)
+        self.SetSignal('B', byte & 0x10 > 0)
+        self.SetSignal(1 , byte & 0x20 > 0)
+        self.SetSignal('V', byte & 0x40 > 0)
+        self.SetSignal('N', byte & 0x80 > 0)
     def ADC(self): #ADD WITH CARRY. C, V, N, Z
         #THIS FUNCTION IS BY FAR THE BIGGEST HEADACHE TO FIGURE OUT
         self.fetch()
@@ -274,7 +286,46 @@ class _6502:
             self.addr = self.addr << 1
             self.SetSignal('N', self.addr > 127)
     def BCC(self):
-        if not self.Flag['c']:  #BRANCH IF CARRY CLEAR. INCREMENTS THE PC BY 2 PLUS THE RELATIVE OFFSET IF THE CARRY IS CLEAR
+        if not self.Flag['C']:  #BRANCH IF CARRY CLEAR. INCREMENTS THE PC BY 2 PLUS THE RELATIVE OFFSET IF THE CARRY IS CLEAR
             self.fetch() #THIS ALREADY INCREMENTS THE PC BY 2 SINCE WE INCREMENT BY INSTRUCTION LENGTH WHEN FETCHING
             self.PC += self.addr #THIS ONLY USES RELATIVE MODE, SO THE ADDRESS IS CONVERTED TO SIGNED BEFOREHAND (SEE REL())
+    def BCS(self): #BRANCH IF CARRY SET. IDENTICAL TO BCC, JUST WITH THE CONDITION FLIPPED
+        if self.Flag['C']:
+            self.fetch()
+            self.PC += self.addr
+    def BEQ(self): #BRANCH IF EQUAL. DOES THE SAME THING IF THE ZERO FLAG IS SET
+        if self.Flag['Z']:
+            self.fetch()
+            self.PC += self.addr
+    def BIT(self): #BIT TEST. Z,V, N. THIS OPERATION ONLY CHANGES FLAGS. IT PERFORMS A BITMASK OF ACC & ADDR, SETTING ZERO IF THE RESULT IS ZERO. V AND N ARE SIMPLY...
+        #...THE VALUES OF BIT 6 AND 7 OF ADDR.
+        self.fetch()
+        self.SetSignal('Z', ~(self.ACC & self.addr))
+        self.SetSignal('N', (self.addr & 0x0080))
+        self.SetSignal('v', (self.addr & 0x0040))
+    def BMI(self): #BRANCH IF MINUS. SAME AS THE PREVIOUS BRANCHES FOR THE NEGATIVE FLAG
+        if self.Flag['N']:
+            self.fetch()
+            self.PC += self.addr
+    def BNI(self): #BRANCH IF NOT EQUAL. (THE ZERO FLAG IS CLEAR)
+        if not self.Flag['Z']:
+            self.fetch()
+            self.PC += self.addr
+    def BPL(self): #BRANCH IF PLUS. (THE NEGATIVE FLAG IS CLEAR)
+        if not self.Flag['N']:
+            self.fetch()
+            self.PC += self.addr
+    def BRK(self): #BREAK (ALSO KNOWN AS A SOFTWARE IRQ). I, B.
+        #THIS ONE'S INTERESTING. WE PUSH THE INCREMENTED PROGRAM COUNTER TO THE STACK AND THEN PUSH ALL THE FLAGS TO THE STACK, AFTER WHICH WE SET THE PC TO A SPECIFIC VALUE
+        self.fetch()
+        self.Push(self.PC * 0xFF00) #GETS THE HIGH BYTE FIRST
+        self.Push(self.PC * 0x00FF) #GETS THE LOW BYTE SECOND
+        #WE PUSH IT IN LITTLE ENDIAN WHEN THE MEMORY HOLDS BIG ENDIAN, BUT IT WORKS OUT SINCE THE STACK COUNTS BACKWARDS
+        self.Push(self.MakeSF())
+        #INTERRUPT DISABLE AND B IS SET TO 1 AFTER PUSHING
+        self.SetSignal('I', 1)
+        self.SetSignal('B', 1)
+        self.PC = 0xFFFE
+        #THIS INTERRUPT IS TECHNICALLY NON MASKABLE, SO ITS USEFUL AS A SOFT INTERRUPT THAT A PROGRAM CAN EXECUTE AT ANY TIME, MAINLY FOR CRASH HANDLING
+
 
