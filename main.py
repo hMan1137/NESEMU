@@ -40,6 +40,7 @@ operations = {0x69: ['ADC', 'IMM', 2, 2], 0x65: ['ADC', 'ZP0', 2, 3], 0x75: ['AD
 class _6502:
 
 
+
     def __init__(self):
         #THE NES USES A RESET VECTOR, SO WE'RE INITIALISING AS IF HAVING JUST DONE A RESET
         self.ACC = 0
@@ -114,7 +115,7 @@ class _6502:
 
     #THE FIRST TWO ARE HELPER FUNCTIONS
     def ZeroPage(self, addr):
-        AssembleByte(self.RAM[addr & 0xFF], self.RAM[(addr + 1) & 0xFF])
+        return AssembleByte(self.RAM[addr & 0xFF], self.RAM[(addr + 1) & 0xFF])
         #BASICALLY JUST PERFORMS A WRAP ON WHATEVER ADDRESS WE GET IS BETWEEN BYTE 1 AND 256
     # NEXT, WE'LL NEED A FUNCTION FOR FETCHING THE RELATIVE ADDRESS WHEN USING RELATIVE ADDRESSING, WHICH GETS THE ADDRESS BY ADDING AN OFFSET TO THE PC
 
@@ -145,7 +146,8 @@ class _6502:
         return self.ZeroPage(self.GetByte(1) + self.IXX)
 
     def IZY(self): #SAME THING WITH Y-OFFSET, EXCEPT ITS ACTUALLY THE FINAL ADDRESS THATS OFFSET FOR SOME REASON
-        return self.ZeroPage( self.GetByte(1) ) + self.IXY
+        var = self.ZeroPage(self.GetByte(1))
+        return var + self.IXY
 
     def REL(self): #THIS ONES WEIRD...IT BASICALLY TAKES THE ADDRESS POINTED TO BY THE PC AND TURNS IT INTO A SIGNED OFFSET BETWEEN -128 AND 127
         #ALL WE NEED TO RETURN HERE IS THE BYTE CONVERTED TO SIGNED
@@ -201,7 +203,7 @@ class _6502:
         self.SP += 1
         return self.RAM[self.SP | 0x100]
     #A SIMPLE FUNCTION TO TURN A SPECIFIC FLAG ON OR OFF WHEN CALLED
-    def SetSignal(self, F : str, on : bool):    #WE WILL DEFINE WHAT ALL THE BITS IN THE STATUS FLAG CORRESPOND TO
+    def SetSignal(self, F, on):    #WE WILL DEFINE WHAT ALL THE BITS IN THE STATUS FLAG CORRESPOND TO
         #HERE ARE ALL THE FLAGS IN ORDER
         # C: Carry, turns on if a carry must be performed, 0x01
         # Z: Zero Flag, turns on if the result of a calculation was zero, 0x02
