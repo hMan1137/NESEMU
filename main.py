@@ -327,5 +327,41 @@ class _6502:
         self.SetSignal('B', 1)
         self.PC = 0xFFFE
         #THIS INTERRUPT IS TECHNICALLY NON MASKABLE, SO ITS USEFUL AS A SOFT INTERRUPT THAT A PROGRAM CAN EXECUTE AT ANY TIME, MAINLY FOR CRASH HANDLING
-
-
+    def BVC(self): #BRANCH IF OVERFLOW CLEAR.
+        if not self.Flag['V']:
+            self.fetch()
+            self.PC += self.addr
+    def BVS(self): #BRANCH IF OVERFLOW SET
+        if self.Flag['V']:
+            self.fetch()
+            self.PC += self.addr
+    def CLC(self): #CLEAR THE CARRY. SELF EXPLANATORY
+        self.fetch()
+        self.SetSignal('C', 0)
+    def CLD(self): #CLEAR THE DECIMAL. THIS WAS USUALLY USED TO ENABLE BCD, BUT THIS IS DISABLED IN THE NES. IT IS, HOWEVER, STILL THERE FOR STATE-STORAGE
+        self.fetch()
+        self.SetSignal('D', 0)
+    def CLI(self): #ClEAR THE INTERRUPT DISABLE
+        self.fetch()
+        self.SetSignal('I', 0)
+    def CLV(self): #CLEAR THE OVERFLOW
+        self.fetch()
+        self.SetSignal('V', 0)
+    def CMP(self): #COMPARE A. COMPARES ACC WITH A VALUE IN MEMORY, SETTING FLAGS AS APPROPRIATE. C, Z, N
+        self.fetch()
+        val = self.ACC - self.addr
+        self.SetSignal('C', val >= 0)
+        self.SetSignal('Z', val == 0)
+        self.SetSignal('N', val < 0)
+    def CPX(self): #COMPARE X. SAME THING WITH REGISTER X. C, Z, N
+        self.fetch()
+        val = self.IXX - self.addr
+        self.SetSignal('C', val >= 0)
+        self.SetSignal('Z', val == 0)
+        self.SetSignal('N', val < 0)
+    def CPY(self): #COMPARE Y. SAME THING WITH REGISTER Y. C, Z, N
+        self.fetch()
+        val = self.IXY - self.addr
+        self.SetSignal('C', val >= 0)
+        self.SetSignal('Z', val == 0)
+        self.SetSignal('N', val < 0)
