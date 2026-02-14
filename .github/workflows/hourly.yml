@@ -19,4 +19,4 @@ jobs:
           git config --local user.email "github-actions@github.com"
           git add .
           git commit -m "Half-Hourly Update" || echo "-"
-          git push
+          git push origin main
