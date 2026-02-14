@@ -97,9 +97,9 @@ class _6502:
         Mode = self.UseMode(mode)
         self.addr = self.ACC if Mode == -1 else self.RAM[Mode]
         return Mode #RETURNING THE INDEX OF RAM WE CHECK AT FOR THE SAKE OF WRITING CHANGES DIRECTLY TO MEMORY
-    def write(self, mode, data):
-        Mode = self.UseMode(mode)
-        self.ACC = data if Mode == -1 else self.RAM[Mode] = data
+    def write(self, data):
+       # Mode = self.UseMode(mode)
+        self.ACC = data if self.INDEX == -1 else self.RAM[self.INDEX] = data #WRITES AT THE CURRENT INDEX BEFORE THE PC INCREMENTS
 
     #OKAY, THIS IS IMPORTANT. WE NEED TO WORK ON ALL THE ADDRESSING MODES. THE NES HAS APPROXIMATELY ONE BAJILLION OF THEM
     #FOR THIS, WE NEED TO UNDERSTAND OPCODE STRUCTURE. IT'S BASICALLY AAABBBCC, WHERE BBB TELLS YOU THE ADDRESSING MODE.
@@ -366,10 +366,10 @@ class _6502:
         self.SetSignal('C', val >= 0)
         self.SetSignal('Z', val == 0)
         self.SetSignal('N', val < 0)
-    def DEC(self):#DECREMENT MEMORY. SUBTRACT ONE FROM A MEMORY LOCATION. Z. N
+    def DEC(self):#DECREMENT MEMORY. SUBTRACT ONE FROM A MEMORY LOCATION. WRITES BACK TO MEMORY/ ACC.Z. N
 
         self.fetch()
-        self.RAM[self.INDEX] -= 1 #self.INDEX stores the index of memory where self.addr is located. We need to do this since we're changing the memory contents directly
+        self.write(self.addr - 1)
         self.SetSignal('Z', self.addr - 1 == 0)
         self.SetSignal('N', (self.addr - 1 > 127))
     def DEX(self): #DECREMENT X. SAME THING BUT FOR THE X REGISTER. Z, N
@@ -387,9 +387,9 @@ class _6502:
         self.ACC = self.ACC ^ self.addr
         self.SetSignal('Z', self.ACC == 0)
         self.SetSignal('N', self.ACC > 127)
-    def INC(self): #INCREMENT MEMORY. ADD ONE TO A MEMORY LOCATION. Z, N.
+    def INC(self): #INCREMENT MEMORY. ADD ONE TO A MEMORY LOCATION. WRITES BACK TO MEMORY/ ACC. Z, N.
         self.fetch()
-        self.RAM[self.INDEX] += 1  # self.INDEX stores the index of memory where self.addr is located. We need to do this since we're changing the memory contents directly
+        self.write(self.addr + 1)
         self.SetSignal('Z', self.addr +1 == 0)
         self.SetSignal('N', (self.addr+ 1 > 127))
     def INX(self): #INCREMENT X. SAME THING BUT FOR THE X REGISTER. Z, N.
@@ -412,3 +412,117 @@ class _6502:
         self.Push(self.PC& 0xFF00)
         self.Push(self.PC & 0x00FF)
         self.PC = self.addr
+    def LDA(self): #LOAD A. LOADS SELF.ADDR INTO ACC. Z, N.
+        self.fetch()
+        self.ACC = self.addr
+        self.SetSignal('Z', self.ACC == 0)
+        self.SetSignal('N', self.ACC > 127)
+    def LDX(self): #LOAD Y. LOADS SELF.ADDR INTO Y. Z, N.
+        self.fetch()
+        self.IXX = self.addr
+        self.SetSignal('Z', self.IXX == 0)
+        self.SetSignal('N', self.IXX > 127)
+    def LDY(self): #LOAD Y. LOADS SELF.ADDR INTO Y. Z, N.
+        self.fetch()
+        self.IXY = self.addr
+        self.SetSignal('Z', self.IXY == 0)
+        self.SetSignal('N', self.IXY > 127)
+    def LSR(self): #LOGICAL SHIFT TO THE RIGHT. WRITES BACK TO MEMORY/ACC. C, Z, N. Carry becomes bit 0
+        self.fetch()
+        self.SetSignal('C', self.addr & 0x01 > 0)
+        self.SetSignal('N', False)
+        self.addr = self.addr >> 1
+        self.SetSignal('Z', self.addr == 0)
+        self.write(self.addr)
+    def NOP(self): #NO OPERATION. JUST WASTES CPU CYCLES
+        self.fetch()
+        return
+    def ORA(self): #BITWISE OR. ORs THE ACCUMULATOR WITH SELF.ADDR. Z, N.
+        self.fetch()
+        self.ACC = self.addr | self.ACC
+        self.SetSignal('Z', self.ACC == 0)
+        self.SetSignal('N', self.ACC > 127)
+    def PHA(self): #PUSH A. SIMPLY PUSHES ACC TO THE STACK
+        self.fetch()
+        self.Push(self.ACC)
+    def PHP(self): #PUSH PROCESSOR STATUS. PUSHES THE STATUS FLAGS AND PUSHES B AS 1. B
+        self.fetch()
+        self.SetSignal('B', True)
+        self.Push(self.MakeSF())
+    def PLA(self): #PULL A. POPS FROM STACK POINTER AND LOADS INTO ACC. Z, N.
+        self.fetch()
+        self.ACC = self.Pop()
+        self.SetSignal('Z', self.ACC == 0)
+        self.SetSignal('N', self.ACC > 127)
+    def PLP(self): #PULL PROCESSOR STATUS. POPS FROM THE STACK AND LOADS INTO THE STATUS FLAGS. ALL THE FLAGS
+        #NOTE THAT THE VALUE OF I CHANGING WILL TAKE EFFECT IN THE NEXT CYCLE, NOT IMMEDIATELY. IMPLEMENT THIS!!!
+        self.fetch()
+        byte = self.Pop()
+        self.BreakSF(byte) #BREAKSF TAKES A BYTE REPRESENTING THE STATUS FLAGS AND CONVERTS THEM INTO THE DICTIONARY FLAGS BEING USED IN THE EMULATION
+    def ROL(self): #SHIFTS ACC/ADDR TO THE LEFT, BUT ACTS AS IF THE CARRY BIT IS BOTH BELOW BIT 0 AND ABOVE BIT 7. CARRY IS SHIFTED TO BIT 0, AND BIT 7 IS THEN...
+        #SHIFTED TO CARRY. THIS INSTRUCTION WRITES BACK TO MEMORY/ACC. C, Z, N.
+        self.fetch()
+        temp = self.addr << 1
+        temp = temp + self.Flag['C'] #CARRY SHIFTED INTO BIT 0
+
+        self.SetSignal('C', self.addr & 0x0080 > 0) #CARRY EQUAL TO BIT 7
+
+        self.SetSignal('N', temp > 127)
+        self.SetSignal('Z', temp == 0)
+        self.write(temp)
+    def ROR(self): #SHIFTS ACC/ADDR TO THE RIGHT. SAME THING BUT THE OTHER WAY AROUND. C, Z, N.
+        self.fetch()
+        temp = self.addr >> 1
+        temp = temp + (self.Flag['C'] << 7)  # CARRY SHIFTED INTO BIT 7
+
+        self.SetSignal('C', self.addr & 0x01 > 0)  # CARRY EQUAL TO BIT 0
+
+        self.SetSignal('N', temp > 127)
+        self.SetSignal('Z', temp == 0)
+        self.write(temp)
+    def RTI(self): #RETURN FROM INTERRUPT. POPS THE STATUS FLAGS FROM THE STACK, THEN POPS THE PC
+        #ONE IMPORTANT THING TO NOTE HERE IS THAT THE INTERRUPT RETURN WILL BE IMMEDIATE, NOT DELAYED ONE CYCLE
+        self.fetch()
+        byte = self.Pop()
+        self.BreakSF(byte)
+        self.PC = self.Pop() + (self.Pop() << 8) #HIGH BYTE COMES IN SECOND, SO IT NEEDS TO BE ASSEMBLED CORRECTLY
+    def RTS(self): #RETURN FROM SUBROUTINE. POPS ADDRESS FROM STACK INTO PC, THEN INCREMENTS
+        self.fetch()
+        self.PC = self.Pop()
+        self.PC += 1
+    def SEC(self): #SET CARRY
+        self.fetch()
+        self.SetSignal('C', True)
+    def SED(self): #SET DECIMAL
+        self.fetch()
+        self.SetSignal('D', True)
+    def SEI(self): #SET INTERRUPT DISABLE
+        self.fetch()
+        self.SetSignal('I', True) #DELAYED ONE INSTRUCTION! IMPLEMENT THIS!
+    def STA(self): #STORE A. STORES ACC INTO MEMORY
+        self.fetch()
+        self.write(self.ACC)
+    def STX(self): #STORE X. STORES X INTO MEMORY
+        self.fetch()
+        self.write(self.IXX)
+    def STY(self): #STORE Y. STORES Y INTO MEMORY
+        self.fetch()
+        self.write(self.IXY)
+    def TAX(self): #TRANSFER A TO X. X == ACC
+        self.fetch()
+        self.IXX = self.ACC
+    def TAY(self): #TRANSFER A TO Y
+        self.fetch()
+        self.IXY = self.ACC
+    def TSX(self): #TRANSFER STACK POINTER TO X
+        self.fetch()
+        self.IXX = self.SP
+    def TXA(self): #TRANSFER X TO A
+        self.fetch()
+        self.ACC = self.IXX
+    def TXS(self): #TRANSFER X TO SP
+        self.fetch()
+        self.SP = self.IXX
+    def TYA(self): #TRANSFER Y TO A
+        self.fetch()
+        self.ACC = self.IXY
