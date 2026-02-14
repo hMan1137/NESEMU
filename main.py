@@ -371,4 +371,44 @@ class _6502:
         self.fetch()
         self.RAM[self.INDEX] -= 1 #self.INDEX stores the index of memory where self.addr is located. We need to do this since we're changing the memory contents directly
         self.SetSignal('Z', self.addr - 1 == 0)
-        self.SetSignal('N', (self.addr - 1 < 0))
+        self.SetSignal('N', (self.addr - 1 > 127))
+    def DEX(self): #DECREMENT X. SAME THING BUT FOR THE X REGISTER. Z, N
+        self.fetch()
+        self.IXX -= 1
+        self.SetSignal('Z', self.IXX== 0)
+        self.SetSignal('N', (self.IXX < 0))
+    def DEY(self): #DECREMENT Y. SAME THING BUT FOR THE Y REGISTER. Z, N
+        self.fetch()
+        self.IXY -= 1
+        self.SetSignal('Z', self.IXY== 0)
+        self.SetSignal('N', (self.IXY < 0))
+    def EOR(self): #EXCLUSIVE OR. EORs BETWEEN ACC AND ADDR, SETTING REGISTERS APPROPRIATELY. Z,N.
+        self.fetch()
+        self.ACC = self.ACC ^ self.addr
+        self.SetSignal('Z', self.ACC == 0)
+        self.SetSignal('N', self.ACC > 127)
+    def INC(self): #INCREMENT MEMORY. ADD ONE TO A MEMORY LOCATION. Z, N.
+        self.fetch()
+        self.RAM[self.INDEX] += 1  # self.INDEX stores the index of memory where self.addr is located. We need to do this since we're changing the memory contents directly
+        self.SetSignal('Z', self.addr +1 == 0)
+        self.SetSignal('N', (self.addr+ 1 > 127))
+    def INX(self): #INCREMENT X. SAME THING BUT FOR THE X REGISTER. Z, N.
+        self.fetch()
+        self.IXX += 1
+        self.SetSignal('Z', self.IXX == 0)
+        self.SetSignal('N', (self.IXX < 0))
+
+    def INY(self):  # DECREMENT Y. SAME THING BUT FOR THE Y REGISTER. Z, N
+        self.fetch()
+        self.IXY += 1
+        self.SetSignal('Z', self.IXY == 0)
+        self.SetSignal('N', (self.IXY < 0))
+
+    def JMP(self): #JUMP. PROGRAM COUNTER IS EQUAL TO THE SELF.ADDR.
+        self.fetch()
+        self.PC = self.addr
+    def JSR(self): #JUMP TO SUBROUTINE. PUSHES CURRENT PC TO STACK THEN SETS IT TO SELF.ADDR. USED WHEN YOU WANT TO BE ABLE TO GO BACK FROM WHERE YOU JUMPED.
+        self.fetch()
+        self.Push(self.PC& 0xFF00)
+        self.Push(self.PC & 0x00FF)
+        self.PC = self.addr
