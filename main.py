@@ -273,7 +273,7 @@ class _6502:
 
         self.fetch()
         base = self.ACC - self.addr
-        val = base - ~self.Flag['C']
+        val = base - (1-self.Flag['C'])
         self.ACC = val & 0x00FF
         self.SetSignal('C', val < 0x0000) #IT COULD NEVER REACH THE UPPER LIMIT OF 255, SO HERE A CARRY OCCURS WHEN IT REACHES THE LOWER LIMIT OF 0
         self.SetSignal('Z', val & 0x00FF == 0)
@@ -300,16 +300,18 @@ class _6502:
             self.addr = self.addr << 1
             self.SetSignal('N', self.addr & 0x80 != 0)
     def BCC(self):
-        if not self.Flag['C']:  #BRANCH IF CARRY CLEAR. INCREMENTS THE PC BY 2 PLUS THE RELATIVE OFFSET IF THE CARRY IS CLEAR
-            self.fetch() #THIS ALREADY INCREMENTS THE PC BY 2 SINCE WE INCREMENT BY INSTRUCTION LENGTH WHEN FETCHING
+        self.fetch()
+        if not self.Flag['C']:  #BRANCH IF CARRY CLEAR. INCREMENTS THE PC BY 2, THEN ADDS THE RELATIVE OFFSET IF THE CARRY IS CLEAR
             self.PC += self.addr #THIS ONLY USES RELATIVE MODE, SO THE ADDRESS IS CONVERTED TO SIGNED BEFOREHAND (SEE REL())
     def BCS(self): #BRANCH IF CARRY SET. IDENTICAL TO BCC, JUST WITH THE CONDITION FLIPPED
+        self.fetch()
         if self.Flag['C']:
-            self.fetch()
+
             self.PC += self.addr
-    def BEQ(self): #BRANCH IF EQUAL. DOES THE SAME THING IF THE ZERO FLAG IS SET
+    def BEQ(self):
+        self.fetch() #BRANCH IF EQUAL. DOES THE SAME THING IF THE ZERO FLAG IS SET
         if self.Flag['Z']:
-            self.fetch()
+
             self.PC += self.addr
     def BIT(self): #BIT TEST. Z,V, N. THIS OPERATION ONLY CHANGES FLAGS. IT PERFORMS A BITMASK OF ACC & ADDR, SETTING ZERO IF THE RESULT IS ZERO. V AND N ARE SIMPLY...
         #...THE VALUES OF BIT 6 AND 7 OF ADDR.
@@ -318,16 +320,19 @@ class _6502:
         self.SetSignal('N', (self.addr & 0x0080))
         self.SetSignal('V', (self.addr & 0x0040))
     def BMI(self): #BRANCH IF MINUS. SAME AS THE PREVIOUS BRANCHES FOR THE NEGATIVE FLAG
+        self.fetch()
         if self.Flag['N']:
-            self.fetch()
+
             self.PC += self.addr
     def BNI(self): #BRANCH IF NOT EQUAL. (THE ZERO FLAG IS CLEAR)
+        self.fetch()
         if not self.Flag['Z']:
-            self.fetch()
+
             self.PC += self.addr
     def BPL(self): #BRANCH IF PLUS. (THE NEGATIVE FLAG IS CLEAR)
+        self.fetch()
         if not self.Flag['N']:
-            self.fetch()
+
             self.PC += self.addr
     def BRK(self): #BREAK (ALSO KNOWN AS A SOFTWARE IRQ). I, B.
         #THIS ONE'S INTERESTING. WE PUSH THE INCREMENTED PROGRAM COUNTER TO THE STACK AND THEN PUSH ALL THE FLAGS TO THE STACK, AFTER WHICH WE SET THE PC TO A SPECIFIC VALUE
@@ -342,12 +347,14 @@ class _6502:
         self.PC = 0xFFFE
         #THIS INTERRUPT IS TECHNICALLY NON MASKABLE, SO ITS USEFUL AS A SOFT INTERRUPT THAT A PROGRAM CAN EXECUTE AT ANY TIME, MAINLY FOR CRASH HANDLING
     def BVC(self): #BRANCH IF OVERFLOW CLEAR.
+        self.fetch()
         if not self.Flag['V']:
-            self.fetch()
+
             self.PC += self.addr
     def BVS(self): #BRANCH IF OVERFLOW SET
+        self.fetch()
         if self.Flag['V']:
-            self.fetch()
+
             self.PC += self.addr
     def CLC(self): #CLEAR THE CARRY. SELF EXPLANATORY
         self.fetch()
@@ -384,7 +391,7 @@ class _6502:
         self.fetch()
         self.write(self.addr - 1)
         self.SetSignal('Z', self.addr - 1 == 0)
-        self.SetSignal('N', ((self.addr - 1) & 0x80 != -))
+        self.SetSignal('N', ((self.addr - 1) & 0x80 != 0))
     def DEX(self): #DECREMENT X. SAME THING BUT FOR THE X REGISTER. Z, N
         self.fetch()
         self.IXX -= 1
@@ -399,7 +406,7 @@ class _6502:
         self.fetch()
         self.ACC = self.ACC ^ self.addr
         self.SetSignal('Z', self.ACC == 0)
-        self.SetSignal('N', self.ACC &0x80 != -)
+        self.SetSignal('N', self.ACC &0x80 !=0)
     def INC(self): #INCREMENT MEMORY. ADD ONE TO A MEMORY LOCATION. WRITES BACK TO MEMORY/ ACC. Z, N.
         self.fetch()
         self.write(self.addr + 1)
