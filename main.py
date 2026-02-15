@@ -69,7 +69,7 @@ class _6502:
         self.PC = AssembleByte(self.RAM[0xFFFC], self.RAM[0xFFFD]) #THIS IS WHERE THE RESET POSITION FOR THE PC IS LOCATED. USUALLY IT'S EQUAL TO 0x8000 BUT ITS MORE...
         #...INTELLIGENT TO MATHEMATICALLY CALCULATE IT LIKE THE 6502 DID SINCE ITS NOT ACTUALLY A HARD-CODED THING, SO THERE COULD BE A WEIRD CASE WHERE IT DOES NOT...
         #...RESET TO 0x8000
-        self.PC = 0x0400 #REQUIRED FOR THIS TEST ROM SPECIFICALLY
+        self.PC = 0x08D9 #REQUIRED FOR THIS TEST ROM SPECIFICALLY
         self.cycle = 0 #A VARIABLE COUNTING DOWN ON THE NUMBER OF CLOCK CYCLES LEFT ON AN INSTRUCTION. NEEDED TO KNOW WHEN IT CAN LEGALLY MOVE ON TO THE NEXT INSTRUCTION
         self.AddCycle = [0, 0] #WILL ADD A CYCLE IF BOTH ELEMENTS ARE ONE. ADDRESSING MODE WILL TURN ON THE FIRST ELEMENT, THE INSTRUCTION WILL TURN ON THE SECOND
         self.AddrModes = {'IMP':self.IMP, 'IMM':self.IMM, 'ABS':self.ABS, 'ABX':self.ABX, 'ABY':self.ABY, 'IZX':self.IZX, 'IZY':self.IZY, 'REL':self.REL,
@@ -89,14 +89,18 @@ class _6502:
 
     def read(self, mode):
         address = mode()
-        self.addr = self.ACC if address == -1 else self.RAM[address]
-        return address #RETURNING THE INDEX OF RAM WE CHECK AT FOR THE SAKE OF WRITING CHANGES DIRECTLY TO MEMORY
+        if mode == self.REL:
+            print("heyup")
+            self.addr = address
+        else:
+            self.addr = self.ACC if address == -1 else self.RAM[address]
+            return address #RETURNING THE INDEX OF RAM WE CHECK AT FOR THE SAKE OF WRITING CHANGES DIRECTLY TO MEMORY
     def write(self, data, address):
        # Mode = self.UseMode(mode)
        if address== -1:
            self.ACC = data
        else:
-           self.RAM[address] = data
+           self.RAM[address & 0xFF] = data & 0xFF
     #WRITES AT THE CURRENT INDEX BEFORE THE PC INCREMENTS
 
     #OKAY, THIS IS IMPORTANT. WE NEED TO WORK ON ALL THE ADDRESSING MODES. THE NES HAS APPROXIMATELY ONE BAJILLION OF THEM
@@ -165,9 +169,10 @@ class _6502:
         #ALL WE NEED TO RETURN HERE IS THE BYTE CONVERTED TO SIGNED
        # if self.GetByte(1) & 0x80: #AND WITH BINARY 10000000, so we're basically checking if the number is 128 or bigger
             val =self.GetByte()
+            print("hiiiii")
             self.AddCycle[0] = 1
             return val - 0x100  if val & 0x80 else val #SUBTRACT 256 TO MAKE IT WRAP TO NEGATIVE
-
+            #WE ARE RETURNING A LIST BECAUSE THE RELATIVE ADDRESS NEEDS TO BE HANDLED IN A DIFFERENT WAY IN THE READ FUNCTION.THE LIST ACTS AS A UNIQUE IDENTIFIER
         #else:
          #   return self.GetByte(1) #RETURN AS IS IF LESS THAN 128
     def ZP0(self): #THIS IS ONLY A ONE BYTE OPERAND SO I CANT JUST USE ZeroPage HERE, EXACT SAME PRINCIPLE THOUGH
@@ -202,7 +207,7 @@ class _6502:
             self.PC += 1
         print("hi")
         if self.cycle == 0:
-            self.PC += 1 #INCREMENT THE COUNTER, THE INSTRUCTION HAS BEEN COMPLETED IF CYCLES IS ZERO
+           # self.PC += 1 #INCREMENT THE COUNTER, THE INSTRUCTION HAS BEEN COMPLETED IF CYCLES IS ZERO
             self.cycle = self.operations[opcode][3]
             #HANDLE ADDITIONAL CLOCK CYCLES:
             self.start()
@@ -389,7 +394,9 @@ class _6502:
             self.PC += self.addr
     def BNE(self): #BRANCH IF NOT EQUAL. (THE ZERO FLAG IS CLEAR)
         self.fetch()
+        print("hiiiiiiiiiiiiiii")
         if not self.Flag['Z']:
+            print("heyyyyy")
             self.AddCycle[1] = 1  # ADDS A CYCLE IF BRANCH IS FULL
             if (self.PC + self.addr) & 0xFF < self.PC: #A PAGE BOUNDARY HAS BEEN CROSSED
                 self.AddCycle[1] = 2 #ADDS TWO CYCLES INSTEAD
@@ -411,7 +418,7 @@ class _6502:
         #INTERRUPT DISABLE AND B IS SET TO 1 AFTER PUSHING
         self.SetSignal('I', 1)
         self.SetSignal('B', 1)
-        self.PC = 0xFFFE
+        self.PC = AssembleByte(self.RAM[0xFFFE], self.RAM[0xFFFF])
         #THIS INTERRUPT IS TECHNICALLY NON MASKABLE, SO ITS USEFUL AS A SOFT INTERRUPT THAT A PROGRAM CAN EXECUTE AT ANY TIME, MAINLY FOR CRASH HANDLING
     def BVC(self): #BRANCH IF OVERFLOW CLEAR.
         self.fetch()
@@ -596,7 +603,8 @@ class _6502:
     def SEI(self): #SET INTERRUPT DISABLE
         self.fetch()
         self.SetSignal('I', True) #DELAYED ONE INSTRUCTION! IMPLEMENT THIS!
-    def STA(self): #STORE A. STORES ACC INTO MEMORY
+    def STA(self):
+        print("eeeee")#STORE A. STORES ACC INTO MEMORY
         fetched = self.fetch()
         self.write(self.ACC, fetched)
     def STX(self): #STORE X. STORES X INTO MEMORY
@@ -624,9 +632,11 @@ class _6502:
         self.fetch()
         self.ACC = self.IXY
 cpu = _6502()
+cpu.PC = 0x0400
 while True:
 
 
-    print(cpu.ACC, cpu.IXX, cpu.IXY, cpu.addr, cpu.PC, cpu.RAM[cpu.PC- 1], cpu.RAM[(cpu.PC) &0xFFFF])
+    #print(hex(cpu.ACC), hex(cpu.IXX), hex(cpu.IXY), hex(cpu.SP), hex(cpu.addr), hex(cpu.PC), hex(cpu.RAM[cpu.PC+1]), hex(cpu.RAM[(cpu.PC)]), hex(cpu.RAM[cpu.PC+2]))
     cpu.clock()
-    time.sleep(0.5)
+    print(hex(cpu.ACC), hex(cpu.IXX), hex(cpu.IXY), hex(cpu.SP), hex(cpu.addr), hex(cpu.PC), hex(cpu.RAM[(cpu.PC+1) & 0xFFFF]), hex(cpu.RAM[(cpu.PC) & 0xFFFF]), hex(cpu.RAM[(cpu.PC+2) & 0xFFFF]))
+    time.sleep(0.1)
