@@ -1,0 +1,22 @@
+name: hourly.yml
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+
+jobs:
+  auto-commit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Make changes
+        run: |
+          echo "Update: $(date)" >> auto_log.txt
+
+      - name: Commit and push
+        run: |
+          git config --local user.name "github-actions"
+          git config --local user.email "github-actions@github.com"
+          git add .
+          git commit -m "Half-Hourly Update" || echo "-"
+          git push origin main
