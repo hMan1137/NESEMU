@@ -1,4 +1,4 @@
-
+import time
 #THE 6502 BEING LITTLE ENDIAN--AND FULL BEING 2 BYTE--MEMORY ADDRESSES NEED TO BE ASSEMBLED IN THE CORRECT ORDER WITH THIS FUNCTION
 def AssembleByte(low, high):
     return (high << 8) | low
@@ -18,7 +18,7 @@ class _6502:
             0x7D: [self.ADC, self.ABX, 3, 4], 0x79: [self.ADC, self.ABY, 3, 4], 0x61: [self.ADC, self.IZX, 2, 6], 0x71: [self.ADC, self.IZY, 2, 5],
             0x29: [self.AND, self.IMM, 2, 2], 0x25: [self.AND, self.ZP0, 2, 3], 0x35: [self.AND, self.ZPX, 2, 4], 0x2D: [self.AND, self.ABS, 3, 4],
             0x3D: [self.AND, self.ABX, 3, 4], 0x39: [self.AND, self.ABY, 3, 4], 0x21: [self.AND, self.IZX, 2, 6], 0x31: [self.AND, self.IZY, 2, 5],
-            0x0A: [self.ASL, self.ACC, 1, 2], 0x06: [self.ASL, self.ZP0, 2, 5], 0x16: [self.ASL, self.ZPX, 2, 6], 0x0E: [self.ASL, self.ABS, 3, 6],
+            0x0A: [self.ASL, self.AC1, 1, 2], 0x06: [self.ASL, self.ZP0, 2, 5], 0x16: [self.ASL, self.ZPX, 2, 6], 0x0E: [self.ASL, self.ABS, 3, 6],
             0x1E: [self.ASL, self.ABX, 3, 7], 0x90: [self.BCC, self.REL, 2, 2], 0xB0: [self.BCS, self.REL, 2, 2], 0xF0: [self.BEQ, self.REL, 2, 2],
             0x24: [self.BIT, self.ZP0, 2, 3], 0x2C: [self.BIT, self.ABS, 3, 4], 0x30: [self.BMI, self.REL, 2, 2], 0xD0: [self.BNE, self.REL, 2, 2],
             0x10: [self.BPL, self.REL, 2, 2], 0x00: [self.BRK, self.IMM, 2, 7], 0x50: [self.BVC, self.REL, 2, 2], 0x70: [self.BVS, self.REL, 2, 2],
@@ -36,13 +36,13 @@ class _6502:
             0xAD: [self.LDA, self.ABS, 3, 4], 0xBD: [self.LDA, self.ABX, 3, 4], 0xB9: [self.LDA, self.ABY, 3, 4], 0xA1: [self.LDA, self.IZX, 2, 6],
             0xB1: [self.LDA, self.IZY, 2, 5], 0xA2: [self.LDX, self.IMM, 2, 2], 0xA6: [self.LDX, self.ZP0, 2, 3], 0xB6: [self.LDX, self.ZPY, 2, 4],
             0xAE: [self.LDX, self.ABS, 3, 4], 0xBE: [self.LDX, self.ABY, 3, 4], 0xA0: [self.LDY, self.IMM, 2, 2], 0xA4: [self.LDY, self.ZP0, 2, 3],
-            0xB4: [self.LDY, self.ZPX, 2, 4], 0xAC: [self.LDY, self.ABS, 3, 4], 0xBC: [self.LDY, self.ABX, 3, 4], 0x4A: [self.LSR, self.ACC, 1, 2],
+            0xB4: [self.LDY, self.ZPX, 2, 4], 0xAC: [self.LDY, self.ABS, 3, 4], 0xBC: [self.LDY, self.ABX, 3, 4], 0x4A: [self.LSR, self.AC1, 1, 2],
             0x46: [self.LSR, self.ZP0, 2, 5], 0x56: [self.LSR, self.ZPX, 2, 6], 0x4E: [self.LSR, self.ABS, 3, 6], 0x5E: [self.LSR, self.ABX, 3, 7],
             0xEA: [self.NOP, self.IMP, 1, 2], 0x09: [self.ORA, self.IMM, 2, 2], 0x05: [self.ORA, self.ZP0, 2, 3], 0x15: [self.ORA, self.ZPX, 2, 4],
             0x0D: [self.ORA, self.ABS, 3, 4], 0x1D: [self.ORA, self.ABX, 3, 4], 0x19: [self.ORA, self.ABY, 3, 4], 0x01: [self.ORA, self.IZX, 2, 6],
             0x11: [self.ORA, self.IZY, 2, 5], 0x48: [self.PHA, self.IMP, 1, 3], 0x08: [self.PHP, self.IMP, 1, 3], 0x68: [self.PLA, self.IMP, 1, 4],
-            0x28: [self.PLP, self.IMP, 1, 4], 0x2A: [self.ROL, self.ACC, 1, 2], 0x26: [self.ROL, self.ZP0, 2, 5], 0x36: [self.ROL, self.ZPX, 2, 6],
-            0x2E: [self.ROL, self.ABS, 3, 6], 0x3E: [self.ROL, self.ABX, 3, 7], 0x6A: [self.ROR, self.ACC, 1, 2], 0x66: [self.ROR, self.ZP0, 2, 5],
+            0x28: [self.PLP, self.IMP, 1, 4], 0x2A: [self.ROL, self.AC1, 1, 2], 0x26: [self.ROL, self.ZP0, 2, 5], 0x36: [self.ROL, self.ZPX, 2, 6],
+            0x2E: [self.ROL, self.ABS, 3, 6], 0x3E: [self.ROL, self.ABX, 3, 7], 0x6A: [self.ROR, self.AC1, 1, 2], 0x66: [self.ROR, self.ZP0, 2, 5],
             0x76: [self.ROR, self.ZPX, 2, 6], 0x6E: [self.ROR, self.ABS, 3, 6], 0x7E: [self.ROR, self.ABX, 3, 7], 0x40: [self.RTI, self.IMP, 1, 6],
             0x60: [self.RTS, self.IMP, 1, 6], 0xE9: [self.SBC, self.IMM, 2, 2], 0xE5: [self.SBC, self.ZP0, 2, 3], 0xF5: [self.SBC, self.ZPX, 2, 4],
             0xED: [self.SBC, self.ABS, 3, 4], 0xFD: [self.SBC, self.ABX, 3, 4], 0xF9: [self.SBC, self.ABY, 3, 4], 0xE1: [self.SBC, self.IZX, 2, 6],
@@ -64,10 +64,13 @@ class _6502:
         #...IF THEY ARE SET THEY WILL BE TRUE, ELSE THEY WILL BE FALSE
         self.RAM = bytearray(65536) #RAM HAS A FULL ADDRESSABLE RANGE OF 64KB, SO BETWEEN 0x0000 and 0xFFFF. IT'S CHOPPED UP IN WEIRD WAYS THOUGH, LIKE THE FIRST TWO KB MIRROR THREE MORE TIMES
         self.addr = 0x0000 #KIND OF A MISNOMER, ITS ACTUALLY THE DATA AT The ADDRESS BUT IMTOO LAZY TO CHANGE IT RIGHT NOW
+        with open("6502_functional_test.bin", "rb") as f:
+            self.RAM[:] = f.read() #setting RAM to a specific test ROM for testing purposes
         self.PC = AssembleByte(self.RAM[0xFFFC], self.RAM[0xFFFD]) #THIS IS WHERE THE RESET POSITION FOR THE PC IS LOCATED. USUALLY IT'S EQUAL TO 0x8000 BUT ITS MORE...
         #...INTELLIGENT TO MATHEMATICALLY CALCULATE IT LIKE THE 6502 DID SINCE ITS NOT ACTUALLY A HARD-CODED THING, SO THERE COULD BE A WEIRD CASE WHERE IT DOES NOT...
         #...RESET TO 0x8000
-        self.cycle = -1 #A VARIABLE COUNTING DOWN ON THE NUMBER OF CLOCK CYCLES LEFT ON AN INSTRUCTION. NEEDED TO KNOW WHEN IT CAN LEGALLY MOVE ON TO THE NEXT INSTRUCTION
+        self.PC = 0x0400 #REQUIRED FOR THIS TEST ROM SPECIFICALLY
+        self.cycle = 0 #A VARIABLE COUNTING DOWN ON THE NUMBER OF CLOCK CYCLES LEFT ON AN INSTRUCTION. NEEDED TO KNOW WHEN IT CAN LEGALLY MOVE ON TO THE NEXT INSTRUCTION
         self.AddCycle = [0, 0] #WILL ADD A CYCLE IF BOTH ELEMENTS ARE ONE. ADDRESSING MODE WILL TURN ON THE FIRST ELEMENT, THE INSTRUCTION WILL TURN ON THE SECOND
         self.AddrModes = {'IMP':self.IMP, 'IMM':self.IMM, 'ABS':self.ABS, 'ABX':self.ABX, 'ABY':self.ABY, 'IZX':self.IZX, 'IZY':self.IZY, 'REL':self.REL,
                           'ZP0': self.ZP0, 'ZPX':self.ZPX, 'ZPY': self.ZPY}
@@ -86,11 +89,11 @@ class _6502:
 
     def read(self, mode):
         address = mode()
-        self.addr = self.ACC if address == self.ACC else self.RAM[address]
+        self.addr = self.ACC if address == -1 else self.RAM[address]
         return address #RETURNING THE INDEX OF RAM WE CHECK AT FOR THE SAKE OF WRITING CHANGES DIRECTLY TO MEMORY
     def write(self, data, address):
        # Mode = self.UseMode(mode)
-       if address== self.ACC:
+       if address== -1:
            self.ACC = data
        else:
            self.RAM[address] = data
@@ -119,7 +122,10 @@ class _6502:
             self.PC += 1 #INCREMENTS PROGRAM COUNTER PER BYTE FETCHED, MORE CYCLE ACCURATE THAN THE PREVIOUS VERSION WHERE I WOULD INCREASE IT ALL AT ONCE AT THE END OF THE INSTRUCTION
         return val
     def IMP(self): #IMPLIED ADDRESSING, SO THERE ISNT REALLY AN OPERAND
+
         return 0 #HEY THAT ONE WAS PRETTY EASY!
+    def AC1(self):
+        return -1
     def IMM(self): #IMMEDIATE ADDRESSING, THE OPERAND IS THE NEXT BYTE
         return self.PC + 1
     def IND(self): #USED TO DEFERENCE FOR A JMP INSTRUCTION. IT JMPS TO THE ADDRESS FOUND ON THE ADDRESS THE PROGRAM TAKES IT
@@ -181,6 +187,7 @@ class _6502:
     #BEFORE WE DO ANYTHING HERE THOUGH, THE 6502 NEEDS A FEW THINGS TO BE ABLE TO PERFORM THESE AT ALL
     #THIS GETS THE DATA WE'RE WORKING WITH FOR AN OPCODE
     def fetch(self):
+
         opcode = self.RAM[self.PC]
         self.PC += 1
         Mode = self.operations[opcode][1]
@@ -188,19 +195,23 @@ class _6502:
         return self.read(Mode) #NOW THAT WE HAVE THE MODE, WE RUN IT THROUGH READ TO SET SELF.ADDR TO THE OPERAND, THIS RETURNS THE RETURN INDEX OF INSTRUCTION
     def start(self): #A METHOD TO CALL WHEN STARTING THE EXECUTION OF AN INSTRUCTION.
         opcode = self.RAM[self.PC]
-        return self.operations[opcode][0]
+        (self.operations[opcode][0]())
     def clock(self):
         opcode =self.RAM[self.PC] #A FUNCTION TELLING THE CPU THAT ONE CLOCK CYCLE HAS PASSED
+        print("hi")
         if self.cycle == 0:
-            self.PC += 1 #INCREMENT THE COUNTER, THE INSTRUCTION HAS BEEN COMPLETED IF CYCLES IS ZERO
+         #   self.PC += 1 #INCREMENT THE COUNTER, THE INSTRUCTION HAS BEEN COMPLETED IF CYCLES IS ZERO
             self.cycle = self.operations[opcode][3]
             #HANDLE ADDITIONAL CLOCK CYCLES:
+            self.start()
             if self.AddCycle[0] == 1:
                 if self.AddCycle[1] == 1:
                     self.cycle += 1
                 elif self.AddCycle[1] > 1:
                     self.cycle += 2
             self.AddCycle = [0, 0]
+            #LIMIT TO ONCE PER CYCLE FOR TESTING
+
         elif self.cycle > 0:
             self.cycle -= 1
     def reset(self): #THAT RESET VECTOR I WAS TALKING ABOUT EARLIER
@@ -610,3 +621,10 @@ class _6502:
     def TYA(self): #TRANSFER Y TO A
         self.fetch()
         self.ACC = self.IXY
+cpu = _6502()
+while True:
+
+
+    print(cpu.ACC, cpu.IXX, cpu.IXY, cpu.addr, cpu.PC, cpu.RAM[cpu.PC])
+    cpu.clock()
+    time.sleep(0.5)
