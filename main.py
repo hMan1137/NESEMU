@@ -205,7 +205,19 @@ class _6502:
         elif self.cycle > 0:
             self.cycle -= 1
     def reset(self): #THAT RESET VECTOR I WAS TALKING ABOUT EARLIER
-        return
+        #JUST REINITIALISES EVERYTHING TO HOW IT WAS
+        self.ACC = 0
+        self.IXX = 0
+        self.IXY = 0
+        #
+        self.SP = 0xFD
+        self.INDEX = 0
+        self.SR = 0x20  # CORRESPONDS TO BIT 5, WHICH IS UNUSED AND ALWAYS PUSHES TO 1
+        self.Flag = {'C': False, 'Z': False, 'I': False, 'D': False, 'B': False, 1: True, 'V': False,
+                     'N': False}
+        self.addr = 0x0000
+        self.PC = AssembleByte(self.RAM[0xFFFC], self.RAM[0xFFFD])
+
     def irq(self): return #AN INTERRUPT REQUEST SIGNAL
     def nmi(self): return  #A NON MASKABLE INTERRUPT. THESE ONES CAN NEVER BE IGNORED, UNLIKE THE REGULAR IRQs
 
