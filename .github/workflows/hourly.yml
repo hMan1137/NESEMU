@@ -20,3 +20,9 @@ jobs:
           git add .
           git commit -m "Half-Hourly Update" || echo "-"
           git push origin main
+      - name: Push changes
+        env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/hMan1137/NESEMU.git
+          git push origin main
