@@ -6,43 +6,54 @@ def AssembleByte(low, high):
 
 #HERES A GIGANTIC DICTIONARY LOOKUP THAT'S GONNA COME IN HANDY LATER
 #IT STORES IN THE FOLLOWING PATTERN: 'OPCODE: ['NAME OF INSTRUCTION', 'ADDRESSING MODE USED', NUMBER OF BYTES USED BY INSTRUCTION, LEAST NUMBER OF CLOCK CYCLES USED]'
-operations = {0x69: ['ADC', 'IMM', 2, 2], 0x65: ['ADC', 'ZP0', 2, 3], 0x75: ['ADC', 'ZPX', 2, 4], 0x6D: ['ADC', 'ABS', 3, 4], 0x7D: ['ADC', 'ABX', 3, 4],
-              0x79: ['ADC', 'ABY', 3, 4], 0x61: ['ADC', 'IZX', 2, 6], 0x71: ['ADC', 'IZY', 2, 5], 0x29: ['AND', 'IMM', 2, 2], 0x25: ['AND', 'ZP0', 2, 3],
-              0x35: ['AND', 'ZPX', 2, 4], 0x2D: ['AND', 'ABS', 3, 4], 0x3D: ['AND', 'ABX', 3, 4], 0x39: ['AND', 'ABY', 3, 4], 0x21: ['AND', 'IZX', 2, 6],
-              0x31: ['AND', 'IZY', 2, 5], 0x0A: ['ASL', 'ACC', 1, 2], 0x06: ['ASL', 'ZP0', 2, 5], 0x16: ['ASL', 'ZPX', 2, 6], 0x0E: ['ASL', 'ABS', 3, 6],
-              0x1E: ['ASL', 'ABX', 3, 7], 0x90: ['BCC', 'REL', 2, 2], 0xB0: ['BCS', 'REL', 2, 2], 0xF0: ['BEQ', 'REL', 2, 2], 0x24: ['BIT', 'ZP0', 2, 3],
-              0x2C: ['BIT', 'ABS', 3, 4], 0x30: ['BMI', 'REL', 2, 2], 0xD0: ['BNE', 'REL', 2, 2], 0x10: ['BPL', 'REL', 2, 2], 0x00: ['BRK', 'IMM', 2, 7],
-              0x50: ['BVC', 'REL', 2, 2], 0x70: ['BVS', 'REL', 2, 2], 0x18: ['CLC', 'IMP', 1, 2], 0xD8: ['CLD', 'IMP', 1, 2], 0x58: ['CLI', 'IMP', 1, 2],
-              0xB8: ['CLV', 'IMP', 1, 2], 0xC9: ['CMP', 'IMM', 2, 2], 0xC5: ['CMP', 'ZP0', 2, 3], 0xD5: ['CMP', 'ZPX', 2, 4], 0xCD: ['CMP', 'ABS', 3, 4],
-              0xDD: ['CMP', 'ABX', 3, 4], 0xD9: ['CMP', 'ABY', 3, 4], 0xC1: ['CMP', 'IZX', 2, 6], 0xD1: ['CMP', 'IZY', 2, 5], 0xE0: ['CPX', 'IMM', 2, 2],
-              0xE4: ['CPX', 'ZP0', 2, 3], 0xEC: ['CPX', 'ABS', 3, 4], 0xC0: ['CPY', 'IMM', 2, 2], 0xC4: ['CPY', 'ZP0', 2, 3], 0xCC: ['CPY', 'ABS', 3, 4],
-              0xC6: ['DEC', 'ZP0', 2, 5], 0xD6: ['DEC', 'ZPX', 2, 6], 0xCE: ['DEC', 'ABS', 2, 6], 0xDE: ['DEC', 'ABY', 2, 7], 0xCA: ['DEX', 'IMP', 1, 2],
-              0x88: ['DEY', 'IMP', 1, 2], 0x49: ['EOR', 'IMM', 2, 2], 0x45: ['EOR', 'ZP0', 2, 3], 0x55: ['EOR', 'ZPX', 2, 4], 0x4D: ['EOR', 'ABS', 3, 4],
-              0x5D: ['EOR', 'ABX', 3, 4], 0x59: ['EOR', 'ABY', 3, 4], 0x41: ['EOR', 'IZX', 2, 6], 0x51: ['EOR', 'IZY', 2, 5], 0xE6: ['INC', 'ZP0', 2, 5],
-              0xF6: ['INC', 'ZPX', 2, 6], 0xEE: ['INC', 'ABS', 3, 6], 0xFE: ['INC', 'ABX', 3, 7], 0xE8: ['INX', 'IMP', 1, 2], 0xC8: ['INY', 'IMP', 1, 2],
-              0x4C: ['JMP', 'ABS', 3, 3], 0x6C: ['JMP', 'IND', 3, 5], 0x20: ['JSR', 'ABS', 3, 6], 0xA9: ['LDA', 'IMM', 2, 2], 0xA5: ['LDA', 'ZP0', 2, 3],
-              0xB5: ['LDA', 'ZPX', 2, 4], 0xAD: ['LDA', 'ABS', 3, 4], 0xBD: ['LDA', 'ABX', 3, 4], 0xB9: ['LDA', 'ABY', 3, 4], 0xA1: ['LDA', 'IZX', 2, 6],
-              0xB1: ['LDA', 'IZY', 2, 5], 0xA2: ['LDX', 'IMM', 2, 2], 0xA6: ['LDX', 'ZP0', 2, 3], 0xB6: ['LDX', 'ZPY', 2, 4], 0xAE: ['LDX', 'ABS', 3, 4],
-              0xBE: ['LDX', 'ABY', 3, 4], 0xA0: ['LDY', 'IMM', 2, 2], 0xA4: ['LDY', 'ZP0', 2, 3], 0xB4: ['LDY', 'ZPX', 2, 4], 0xAC: ['LDY', 'ABS', 3, 4],
-              0xBC: ['LDY', 'ABX', 3, 4], 0x4A: ['LSR', 'ACC', 1, 2], 0x46: ['LSR', 'ZP0', 2, 5], 0x56: ['LSR', 'ZPX', 2, 6], 0x4E: ['LSR', 'ABS', 3, 6],
-              0x5E: ['LSR', 'ABX', 3, 7], 0xEA: ['NOP', 'IMP', 1, 2], 0x09: ['ORA', 'IMM', 2, 2], 0x05: ['ORA', 'ZP0', 2, 3], 0x15: ['ORA', 'ZPX', 2, 4],
-              0x0D: ['ORA', 'ABS', 3, 4], 0x1D: ['ORA', 'ABX', 3, 4], 0x19: ['ORA', 'ABY', 3, 4], 0x01: ['ORA', 'IZX', 2, 6], 0x11: ['ORA', 'IZY', 2, 5],
-              0x48: ['PHA', 'IMP', 1, 3], 0x08: ['PHP', 'IMP', 1, 3], 0x68: ['PLA', 'IMP', 1, 4], 0x28: ['PLP', 'IMP', 1, 4], 0x2A: ['ROL', 'ACC', 1, 2],
-              0x26: ['ROL', 'ZP0', 2, 5], 0x36: ['ROL', 'ZPX', 2, 6], 0x2E: ['ROL', 'ABS', 3, 6], 0x3E: ['ROL', 'ABX', 3, 7], 0x6A: ['ROR', 'ACC', 1, 2],
-              0x66: ['ROR', 'ZP0', 2, 5], 0x76: ['ROR', 'ZPX', 2, 6], 0x6E: ['ROR', 'ABS', 3, 6], 0x7E: ['ROR', 'ABX', 3, 7], 0x40: ['RTI', 'IMP', 1, 6],
-              0x60: ['RTS', 'IMP', 1, 6], 0xE9: ['SBC', 'IMM', 2, 2], 0xE5: ['SBC', 'ZP0', 2, 3], 0xF5: ['SBC', 'ZPX', 2, 4], 0xED: ['SBC', 'ABS', 3, 4],
-              0xFD: ['SBC', 'ABX', 3, 4], 0xF9: ['SBC', 'ABY', 3, 4], 0xE1: ['SBC', 'IZX', 2, 6], 0xF1: ['SBC', 'IZY', 2, 5], 0x38: ['SEC', 'IMP', 1, 2],
-              0xF8: ['SED', 'IMP', 1, 2], 0x78: ['SEI', 'IMP', 1, 2], 0x85: ['STA', 'ZP0', 2, 3], 0x95: ['STA', 'ZPX', 2, 4], 0x8D: ['STA', 'ABS', 3, 4],
-              0x9D: ['STA', 'ABX', 3, 5], 0x99: ['STA', 'ABY', 3, 5], 0x81: ['STA', 'IZX', 2, 6], 0x91: ['STA', 'IZY', 2, 6], 0x86: ['STX', 'ZP0', 2, 3],
-              0x96: ['STX', 'ZPX', 2, 4], 0x8E: ['STX', 'ABS', 3, 4], 0x84: ['STY', 'ZP0', 2, 3], 0x94: ['STY', 'ZPX', 2, 4], 0x8C: ['STY', 'ABS', 3, 4],
-              0xAA: ['TAX', 'IMP', 1, 2], 0xA8: ['TAY', 'IMP', 1, 2], 0xBA: ['TSX', 'IMP', 1, 2], 0x8A: ['TXA', 'IMP', 1, 2], 0x9A: ['TXS', 'IMP', 1, 2],
-              0x98: ['TYA', 'IMP', 1, 2]}
+
 class _6502:
 
 
 
     def __init__(self):
         #THE NES USES A RESET VECTOR, SO WE'RE INITIALISING AS IF HAVING JUST DONE A RESET
+        self.operations = {
+            0x69: [self.ADC, self.IMM, 2, 2], 0x65: [self.ADC, self.ZP0, 2, 3], 0x75: [self.ADC, self.ZPX, 2, 4], 0x6D: [self.ADC, self.ABS, 3, 4],
+            0x7D: [self.ADC, self.ABX, 3, 4], 0x79: [self.ADC, self.ABY, 3, 4], 0x61: [self.ADC, self.IZX, 2, 6], 0x71: [self.ADC, self.IZY, 2, 5],
+            0x29: [self.AND, self.IMM, 2, 2], 0x25: [self.AND, self.ZP0, 2, 3], 0x35: [self.AND, self.ZPX, 2, 4], 0x2D: [self.AND, self.ABS, 3, 4],
+            0x3D: [self.AND, self.ABX, 3, 4], 0x39: [self.AND, self.ABY, 3, 4], 0x21: [self.AND, self.IZX, 2, 6], 0x31: [self.AND, self.IZY, 2, 5],
+            0x0A: [self.ASL, self.ACC, 1, 2], 0x06: [self.ASL, self.ZP0, 2, 5], 0x16: [self.ASL, self.ZPX, 2, 6], 0x0E: [self.ASL, self.ABS, 3, 6],
+            0x1E: [self.ASL, self.ABX, 3, 7], 0x90: [self.BCC, self.REL, 2, 2], 0xB0: [self.BCS, self.REL, 2, 2], 0xF0: [self.BEQ, self.REL, 2, 2],
+            0x24: [self.BIT, self.ZP0, 2, 3], 0x2C: [self.BIT, self.ABS, 3, 4], 0x30: [self.BMI, self.REL, 2, 2], 0xD0: [self.BNE, self.REL, 2, 2],
+            0x10: [self.BPL, self.REL, 2, 2], 0x00: [self.BRK, self.IMM, 2, 7], 0x50: [self.BVC, self.REL, 2, 2], 0x70: [self.BVS, self.REL, 2, 2],
+            0x18: [self.CLC, self.IMP, 1, 2], 0xD8: [self.CLD, self.IMP, 1, 2], 0x58: [self.CLI, self.IMP, 1, 2], 0xB8: [self.CLV, self.IMP, 1, 2],
+            0xC9: [self.CMP, self.IMM, 2, 2], 0xC5: [self.CMP, self.ZP0, 2, 3], 0xD5: [self.CMP, self.ZPX, 2, 4], 0xCD: [self.CMP, self.ABS, 3, 4],
+            0xDD: [self.CMP, self.ABX, 3, 4], 0xD9: [self.CMP, self.ABY, 3, 4], 0xC1: [self.CMP, self.IZX, 2, 6], 0xD1: [self.CMP, self.IZY, 2, 5],
+            0xE0: [self.CPX, self.IMM, 2, 2], 0xE4: [self.CPX, self.ZP0, 2, 3], 0xEC: [self.CPX, self.ABS, 3, 4], 0xC0: [self.CPY, self.IMM, 2, 2],
+            0xC4: [self.CPY, self.ZP0, 2, 3], 0xCC: [self.CPY, self.ABS, 3, 4], 0xC6: [self.DEC, self.ZP0, 2, 5], 0xD6: [self.DEC, self.ZPX, 2, 6],
+            0xCE: [self.DEC, self.ABS, 2, 6], 0xDE: [self.DEC, self.ABY, 2, 7], 0xCA: [self.DEX, self.IMP, 1, 2], 0x88: [self.DEY, self.IMP, 1, 2],
+            0x49: [self.EOR, self.IMM, 2, 2], 0x45: [self.EOR, self.ZP0, 2, 3], 0x55: [self.EOR, self.ZPX, 2, 4], 0x4D: [self.EOR, self.ABS, 3, 4],
+            0x5D: [self.EOR, self.ABX, 3, 4], 0x59: [self.EOR, self.ABY, 3, 4], 0x41: [self.EOR, self.IZX, 2, 6], 0x51: [self.EOR, self.IZY, 2, 5],
+            0xE6: [self.INC, self.ZP0, 2, 5], 0xF6: [self.INC, self.ZPX, 2, 6], 0xEE: [self.INC, self.ABS, 3, 6], 0xFE: [self.INC, self.ABX, 3, 7],
+            0xE8: [self.INX, self.IMP, 1, 2], 0xC8: [self.INY, self.IMP, 1, 2], 0x4C: [self.JMP, self.ABS, 3, 3], 0x6C: [self.JMP, self.IND, 3, 5],
+            0x20: [self.JSR, self.ABS, 3, 6], 0xA9: [self.LDA, self.IMM, 2, 2], 0xA5: [self.LDA, self.ZP0, 2, 3], 0xB5: [self.LDA, self.ZPX, 2, 4],
+            0xAD: [self.LDA, self.ABS, 3, 4], 0xBD: [self.LDA, self.ABX, 3, 4], 0xB9: [self.LDA, self.ABY, 3, 4], 0xA1: [self.LDA, self.IZX, 2, 6],
+            0xB1: [self.LDA, self.IZY, 2, 5], 0xA2: [self.LDX, self.IMM, 2, 2], 0xA6: [self.LDX, self.ZP0, 2, 3], 0xB6: [self.LDX, self.ZPY, 2, 4],
+            0xAE: [self.LDX, self.ABS, 3, 4], 0xBE: [self.LDX, self.ABY, 3, 4], 0xA0: [self.LDY, self.IMM, 2, 2], 0xA4: [self.LDY, self.ZP0, 2, 3],
+            0xB4: [self.LDY, self.ZPX, 2, 4], 0xAC: [self.LDY, self.ABS, 3, 4], 0xBC: [self.LDY, self.ABX, 3, 4], 0x4A: [self.LSR, self.ACC, 1, 2],
+            0x46: [self.LSR, self.ZP0, 2, 5], 0x56: [self.LSR, self.ZPX, 2, 6], 0x4E: [self.LSR, self.ABS, 3, 6], 0x5E: [self.LSR, self.ABX, 3, 7],
+            0xEA: [self.NOP, self.IMP, 1, 2], 0x09: [self.ORA, self.IMM, 2, 2], 0x05: [self.ORA, self.ZP0, 2, 3], 0x15: [self.ORA, self.ZPX, 2, 4],
+            0x0D: [self.ORA, self.ABS, 3, 4], 0x1D: [self.ORA, self.ABX, 3, 4], 0x19: [self.ORA, self.ABY, 3, 4], 0x01: [self.ORA, self.IZX, 2, 6],
+            0x11: [self.ORA, self.IZY, 2, 5], 0x48: [self.PHA, self.IMP, 1, 3], 0x08: [self.PHP, self.IMP, 1, 3], 0x68: [self.PLA, self.IMP, 1, 4],
+            0x28: [self.PLP, self.IMP, 1, 4], 0x2A: [self.ROL, self.ACC, 1, 2], 0x26: [self.ROL, self.ZP0, 2, 5], 0x36: [self.ROL, self.ZPX, 2, 6],
+            0x2E: [self.ROL, self.ABS, 3, 6], 0x3E: [self.ROL, self.ABX, 3, 7], 0x6A: [self.ROR, self.ACC, 1, 2], 0x66: [self.ROR, self.ZP0, 2, 5],
+            0x76: [self.ROR, self.ZPX, 2, 6], 0x6E: [self.ROR, self.ABS, 3, 6], 0x7E: [self.ROR, self.ABX, 3, 7], 0x40: [self.RTI, self.IMP, 1, 6],
+            0x60: [self.RTS, self.IMP, 1, 6], 0xE9: [self.SBC, self.IMM, 2, 2], 0xE5: [self.SBC, self.ZP0, 2, 3], 0xF5: [self.SBC, self.ZPX, 2, 4],
+            0xED: [self.SBC, self.ABS, 3, 4], 0xFD: [self.SBC, self.ABX, 3, 4], 0xF9: [self.SBC, self.ABY, 3, 4], 0xE1: [self.SBC, self.IZX, 2, 6],
+            0xF1: [self.SBC, self.IZY, 2, 5], 0x38: [self.SEC, self.IMP, 1, 2], 0xF8: [self.SED, self.IMP, 1, 2], 0x78: [self.SEI, self.IMP, 1, 2],
+            0x85: [self.STA, self.ZP0, 2, 3], 0x95: [self.STA, self.ZPX, 2, 4], 0x8D: [self.STA, self.ABS, 3, 4], 0x9D: [self.STA, self.ABX, 3, 5],
+            0x99: [self.STA, self.ABY, 3, 5], 0x81: [self.STA, self.IZX, 2, 6], 0x91: [self.STA, self.IZY, 2, 6], 0x86: [self.STX, self.ZP0, 2, 3],
+            0x96: [self.STX, self.ZPX, 2, 4], 0x8E: [self.STX, self.ABS, 3, 4], 0x84: [self.STY, self.ZP0, 2, 3], 0x94: [self.STY, self.ZPX, 2, 4],
+            0x8C: [self.STY, self.ABS, 3, 4], 0xAA: [self.TAX, self.IMP, 1, 2], 0xA8: [self.TAY, self.IMP, 1, 2], 0xBA: [self.TSX, self.IMP, 1, 2],
+            0x8A: [self.TXA, self.IMP, 1, 2], 0x9A: [self.TXS, self.IMP, 1, 2], 0x98: [self.TYA, self.IMP, 1, 2],
+        }
+
         self.ACC = 0
         self.IXX = 0
         self.IXY = 0
@@ -58,49 +69,28 @@ class _6502:
         #...RESET TO 0x8000
         self.cycle = -1 #A VARIABLE COUNTING DOWN ON THE NUMBER OF CLOCK CYCLES LEFT ON AN INSTRUCTION. NEEDED TO KNOW WHEN IT CAN LEGALLY MOVE ON TO THE NEXT INSTRUCTION
         self.AddCycle = [0, 0] #WILL ADD A CYCLE IF BOTH ELEMENTS ARE ONE. ADDRESSING MODE WILL TURN ON THE FIRST ELEMENT, THE INSTRUCTION WILL TURN ON THE SECOND
-
-
+        self.AddrModes = {'IMP':self.IMP, 'IMM':self.IMM, 'ABS':self.ABS, 'ABX':self.ABX, 'ABY':self.ABY, 'IZX':self.IZX, 'IZY':self.IZY, 'REL':self.REL,
+                          'ZP0': self.ZP0, 'ZPX':self.ZPX, 'ZPY': self.ZPY}
+        #self.Instructions = {'ADC': self.ADC, 'SBC': self.SBC, 'AND': self.AND, 'ASL': self.ASL, 'BCC':self.BCC, 'BCS':self.BCS, 'BEQ': self.BEQ, 'BIT': self.BIT,
+         #                    'BMI': self.BMI, 'BNE':self.BNE, 'BPL': self.BPL, 'BRK': self.BRK, 'BVC': self.BVC, 'BVS': self.BVS, 'CRC': self.CLC, 'CLD': self.CLD
     #A DETERMINER FUNCTION FOR KNOWING WHAT ADDRESS MODE WE'RE WORKING WITH AND THUS PERFORMING THE APPROPRIATE ADDRESSING MODE FUNCTION. THE ADDRESSING MODES ARE DEALT WITH...
     #...A LITTLE LATER
-    def UseMode(self, mode):
-        if mode == 'IMP':
-            return self.IMP()
-        elif mode == 'IMM':
-            return self.IMM()
-        elif mode == 'ABS':
-            return self.ABS()
-        elif mode == 'ABX':
-            return self.ABX()
-        elif mode == 'ABY':
-            return self.ABY()
-        elif mode == 'IZX':
-            return self.IZX()
-        elif mode == 'IZY':
-            return self.IZY()
-        elif mode == 'REL':
-            return self.REL()
-        elif mode == 'ZP0':
-            return self.ZP0()
-        elif mode == 'ZPX':
-            return self.ZPX()
-        elif mode == 'ZPY':
-            return self.ZPY()
-        elif mode == 'IND':
-            return self.IND()
-        elif mode == 'ACC': #some commands address the accumulator directly, so we're gonna deal with that separately here
-            return -1
-        else:               #CATCH-ALL FOR ANYTHING ILLEGAL
-            return -2
-
+    #def UseMode(self, mode):
+     #   if mode == 'ACC': #some commands address the accumulator directly, so we're gonna deal with that separately here
+      #      return -1
+      #  elif mode != 'ACC' & mode not in list(self.AddrModes.keys()): #CATCH ALL FOR ILLEGAL ADDRESSING MODES
+      #      return -2
+      #  else:
+      #      return self.AddrModes[mode]()
     #FUNCTIONS THAT READ FROM AND WRITE TO THE ADDRESS
 
     def read(self, mode):
-        address = self.UseMode(mode)
-        self.addr = self.ACC if address == -1 else self.RAM[address]
+        address = mode()
+        self.addr = self.ACC if address == self.ACC else self.RAM[address]
         return address #RETURNING THE INDEX OF RAM WE CHECK AT FOR THE SAKE OF WRITING CHANGES DIRECTLY TO MEMORY
     def write(self, data, address):
        # Mode = self.UseMode(mode)
-       if address== -1:
+       if address== self.ACC:
            self.ACC = data
        else:
            self.RAM[address] = data
@@ -145,16 +135,24 @@ class _6502:
         return AssembleByte(self.GetByte(), self.GetByte())
 
     def ABX(self): #ABSOLUTE ADDRESSING WITH AN X REGISTER OFFSET
-        return AssembleByte(self.GetByte(), self.GetByte()) + self.IXX
+        val = AssembleByte(self.GetByte(), self.GetByte())
+        if (val + self.IXX) & 0xFF < val:
+            self.AddCycle[0] = 1 #PAGE BOUNDARY HAS BEEN CROSSED
+        return val + self.IXX
 
     def ABY(self): #ABSOLUTE ADDRESSING WITH A Y REGISTER OFFSET
-        return AssembleByte(self.GetByte(), self.GetByte()) + self.IXY
+        val = AssembleByte(self.GetByte(), self.GetByte())
+        if (val + self.IXY) & 0xFF < val:
+            self.AddCycle[0] = 1 #PAGE BOUNDARY HAS BEEN CROSSED
+        return val + self.IXY
 
     def IZX(self): #INDIRECT ZERO-PAGE ADDRESSING WITH X REGISTER OFFSET
         return self.ZeroPage(self.GetByte() + self.IXX)
 
     def IZY(self): #SAME THING WITH Y-OFFSET, EXCEPT ITS ACTUALLY THE FINAL ADDRESS THATS OFFSET FOR SOME REASON
         var = self.ZeroPage(self.GetByte())
+        if (var + self.IXY) & 0xFF < var:
+            self.AddCycle[0] = 1  #PAGE BOUNDARY HAS BEEN CROSSED
         return var + self.IXY
 
     def REL(self): #THIS ONES WEIRD...IT BASICALLY TAKES THE ADDRESS POINTED TO BY THE PC AND TURNS IT INTO A SIGNED OFFSET BETWEEN -128 AND 127
@@ -185,14 +183,24 @@ class _6502:
     def fetch(self):
         opcode = self.RAM[self.PC]
         self.PC += 1
-        Mode = operations[opcode][1]
+        Mode = self.operations[opcode][1]
 
         return self.read(Mode) #NOW THAT WE HAVE THE MODE, WE RUN IT THROUGH READ TO SET SELF.ADDR TO THE OPERAND, THIS RETURNS THE RETURN INDEX OF INSTRUCTION
+    def start(self): #A METHOD TO CALL WHEN STARTING THE EXECUTION OF AN INSTRUCTION.
+        opcode = self.RAM[self.PC]
+        return self.operations[opcode][0]
     def clock(self):
         opcode =self.RAM[self.PC] #A FUNCTION TELLING THE CPU THAT ONE CLOCK CYCLE HAS PASSED
         if self.cycle == 0:
             self.PC += 1 #INCREMENT THE COUNTER, THE INSTRUCTION HAS BEEN COMPLETED IF CYCLES IS ZERO
-            self.cycle = operations[opcode][3]
+            self.cycle = self.operations[opcode][3]
+            #HANDLE ADDITIONAL CLOCK CYCLES:
+            if self.AddCycle[0] == 1:
+                if self.AddCycle[1] == 1:
+                    self.cycle += 1
+                elif self.AddCycle[1] > 1:
+                    self.cycle += 2
+            self.AddCycle = [0, 0]
         elif self.cycle > 0:
             self.cycle -= 1
     def reset(self): #THAT RESET VECTOR I WAS TALKING ABOUT EARLIER
@@ -296,7 +304,7 @@ class _6502:
         #...((A AND B) XOR C). THE ONLY PROBLEM WITH THIS EXPRESSION IS THAT IT CAN TRIGGER TRUE WHEN A AND B ARE DIFFERENT FROM EACH OTHER, BUT IT SHOULD NEVER BE TRUE...
         #...SO THAT MEANS YOU WANT THE ENTIRE EXPRESSION TO BE FALSE IF A AND B ARE DIFFERENT, HENCE THE NOT(A XOR B) AT THE START.
         #PHEW! THAT ONE WAS PRETTY CEREBRAL, BUT APPARENTLY NOTHING IS AS COMPLICATED AFTER SBC.
-
+        self.AddCycle[1] = 1 #JUST LETTING THE CLOCK KNOW ABOUT POTENTIAL ADDITIONAL CYCLES ON ABX, ABY AND IZY
     def SBC(self): #SUBTRACT WITH BORROW, C, V, N, Z
         #BORROW EFFECTIVELY MEANS NOT(CARRY)
 
@@ -310,14 +318,16 @@ class _6502:
         self.SetSignal('V', 0x0080 & ((self.ACC ^ self.addr) & ((self.ACC & self.addr) ^ val))) #HERE, IT IS THE SAME EXCEPT THE NOT FROM THE XOR IS REMOVED BECAUSE...
         #...OVERFLOW IN SUBTRACTION CAN ONLY OCCUR WHEN BOTH NUMBERS HAVE *DIFFERENT* MSBs, WHICH IS BECAUSE SUBTRACTING A FROM B IS THE SAME THING AS ADDING THE...
         #...COMPLEMENT OF A FROM B. SO, SUBTRACTING DIFFERENT MSBs BECOMES THE SAME AS ADDING THE SAME MSBs
+        self.AddCycle[1] = 1 #JUST LETTING THE CLOCK KNOW ABOUT POTENTIAL ADDITIONAL CYCLES ON ABX, ABY AND IZY
     def AND(self): #BITWISE AND. Z, N
         self.fetch()
         self.ACC = self.ACC & self.addr
         self.SetSignal('N', self.ACC & 0x80 != 0)
         self.SetSignal('Z', self.ACC & 0x00FF == 0)
-    def LSL(self): #LOGICAL LEFT SHIFT TO EITHER ACC OR VALUE. C, Z, N
+        self.AddCycle[1] = 1 #JUST LETTING THE CLOCK KNOW ABOUT POTENTIAL ADDITIONAL CYCLES ON ABX, ABY AND IZY
+    def ASL(self): #ARITHMETIC LEFT SHIFT TO EITHER ACC OR VALUE. C, Z, N
         mode = self.fetch()
-        if mode == 'ACC':
+        if mode == self.ACC:
             #THE CARRY IS SET IF THE INITIAL VALUE HAD BIT 7 ON
             self.SetSignal('C', self.ACC & 0x80 != 0)
             self.ACC = self.ACC << 1
@@ -328,6 +338,7 @@ class _6502:
             self.SetSignal('C', self.addr & 0x80 != 0)
             self.addr = self.addr << 1
             self.SetSignal('N', self.addr & 0x80 != 0)
+            self.write(self.addr, mode)
     def BCC(self):
         self.fetch()
         if not self.Flag['C']:  #BRANCH IF CARRY CLEAR. INCREMENTS THE PC BY 2, THEN ADDS THE RELATIVE OFFSET IF THE CARRY IS CLEAR
@@ -363,7 +374,7 @@ class _6502:
             if (self.PC + self.addr) & 0xFF < self.PC: #A PAGE BOUNDARY HAS BEEN CROSSED
                 self.AddCycle[1] = 2 #ADDS TWO CYCLES INSTEAD
             self.PC += self.addr
-    def BNI(self): #BRANCH IF NOT EQUAL. (THE ZERO FLAG IS CLEAR)
+    def BNE(self): #BRANCH IF NOT EQUAL. (THE ZERO FLAG IS CLEAR)
         self.fetch()
         if not self.Flag['Z']:
             self.AddCycle[1] = 1  # ADDS A CYCLE IF BRANCH IS FULL
@@ -421,6 +432,7 @@ class _6502:
         self.SetSignal('C', val >= 0)
         self.SetSignal('Z', val == 0)
         self.SetSignal('N', val < 0)
+        self.AddCycle[1] = 1 #JUST LETTING THE CLOCK KNOW ABOUT POTENTIAL ADDITIONAL CYCLES ON ABX, ABY AND IZY
     def CPX(self): #COMPARE X. SAME THING WITH REGISTER X. C, Z, N
         self.fetch()
         val = self.IXX - self.addr
@@ -454,6 +466,7 @@ class _6502:
         self.ACC = self.ACC ^ self.addr
         self.SetSignal('Z', self.ACC == 0)
         self.SetSignal('N', self.ACC &0x80 !=0)
+        self.AddCycle[1] = 1 #JUST LETTING THE CLOCK KNOW ABOUT POTENTIAL ADDITIONAL CYCLES ON ABX, ABY AND IZY
     def INC(self): #INCREMENT MEMORY. ADD ONE TO A MEMORY LOCATION. WRITES BACK TO MEMORY/ ACC. Z, N.
         fetched = self.fetch()
         self.write(self.addr + 1, fetched)
@@ -484,16 +497,19 @@ class _6502:
         self.ACC = self.addr
         self.SetSignal('Z', self.ACC == 0)
         self.SetSignal('N', self.ACC & 0x80 !=0)
+        self.AddCycle[1] = 1 #JUST LETTING THE CLOCK KNOW ABOUT POTENTIAL ADDITIONAL CYCLES ON ABX, ABY AND IZY
     def LDX(self): #LOAD Y. LOADS SELF.ADDR INTO Y. Z, N.
         self.fetch()
         self.IXX = self.addr
         self.SetSignal('Z', self.IXX == 0)
         self.SetSignal('N', self.IXX & 0x80 !=0)
+        self.AddCycle[1] = 1 #JUST LETTING THE CLOCK KNOW ABOUT POTENTIAL ADDITIONAL CYCLES ON ABY
     def LDY(self): #LOAD Y. LOADS SELF.ADDR INTO Y. Z, N.
         self.fetch()
         self.IXY = self.addr
         self.SetSignal('Z', self.IXY == 0)
         self.SetSignal('N', self.IXY &0x80 != 0)
+        self.AddCycle[1] = 1 #JUST LETTING THE CLOCK KNOW ABOUT POTENTIAL ADDITIONAL CYCLES ON ABX
     def LSR(self): #LOGICAL SHIFT TO THE RIGHT. WRITES BACK TO MEMORY/ACC. C, Z, N. Carry becomes bit 0
         fetched = self.fetch()
         self.SetSignal('C', self.addr & 0x01 != 0)
@@ -509,6 +525,7 @@ class _6502:
         self.ACC = self.addr | self.ACC
         self.SetSignal('Z', self.ACC == 0)
         self.SetSignal('N', self.ACC & 0x80 !=0)
+        self.AddCycle[1] = 1 #JUST LETTING THE CLOCK KNOW ABOUT POTENTIAL ADDITIONAL CYCLES ON ABX, ABY AND IZY
     def PHA(self): #PUSH A. SIMPLY PUSHES ACC TO THE STACK
         self.fetch()
         self.Push(self.ACC)
