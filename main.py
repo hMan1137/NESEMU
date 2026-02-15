@@ -127,7 +127,7 @@ class _6502:
     def AC1(self):
         return -1
     def IMM(self): #IMMEDIATE ADDRESSING, THE OPERAND IS THE NEXT BYTE
-        return self.PC + 1
+        return self.PC
     def IND(self): #USED TO DEFERENCE FOR A JMP INSTRUCTION. IT JMPS TO THE ADDRESS FOUND ON THE ADDRESS THE PROGRAM TAKES IT
         lb = self.GetByte()
         hb = self.GetByte()
@@ -198,9 +198,11 @@ class _6502:
         (self.operations[opcode][0]())
     def clock(self):
         opcode =self.RAM[self.PC] #A FUNCTION TELLING THE CPU THAT ONE CLOCK CYCLE HAS PASSED
+        if opcode not in list(self.operations.keys()):
+            self.PC += 1
         print("hi")
         if self.cycle == 0:
-         #   self.PC += 1 #INCREMENT THE COUNTER, THE INSTRUCTION HAS BEEN COMPLETED IF CYCLES IS ZERO
+            self.PC += 1 #INCREMENT THE COUNTER, THE INSTRUCTION HAS BEEN COMPLETED IF CYCLES IS ZERO
             self.cycle = self.operations[opcode][3]
             #HANDLE ADDITIONAL CLOCK CYCLES:
             self.start()
@@ -625,6 +627,6 @@ cpu = _6502()
 while True:
 
 
-    print(cpu.ACC, cpu.IXX, cpu.IXY, cpu.addr, cpu.PC, cpu.RAM[cpu.PC])
+    print(cpu.ACC, cpu.IXX, cpu.IXY, cpu.addr, cpu.PC, cpu.RAM[cpu.PC- 1], cpu.RAM[(cpu.PC) &0xFFFF])
     cpu.clock()
     time.sleep(0.5)
