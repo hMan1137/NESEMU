@@ -120,54 +120,59 @@ class _6502:
 
     #THE FIRST TWO ARE HELPER FUNCTIONS
     def ZeroPage(self, addr):
-        return AssembleByte(self.RAM[addr & 0xFF], self.RAM[(addr + 1) & 0xFF])
+        return AssembleByte(self.RAM[addr & 0x00FF], self.RAM[(addr + 1) & 0x00FF])
         #BASICALLY JUST PERFORMS A WRAP ON WHATEVER ADDRESS WE GET IS BETWEEN BYTE 1 AND 256
     # NEXT, WE'LL NEED A FUNCTION FOR FETCHING THE RELATIVE ADDRESS WHEN USING RELATIVE ADDRESSING, WHICH GETS THE ADDRESS BY ADDING AN OFFSET TO THE PC
 
-    def GetByte(self, offset):
-        return self.RAM[offset + self.PC]  # GETS INSTRUCTION AT PC BY ADDING SOME OFFSET SPECIFIED BY THE ADDRESSING MODE. FOR EXAMPLE, ABSOLUTE WOULD ASSEMBLE...
-                                           # ...A FULL ADDRESS BY OFFSETTING THE PROGRAM COUNTER BY 1 AND 2 BECAUSE IT WILL BE A 2 BYTE ADDRESS/NUMBER LIVING RIGHT AFTER THE OPCODE
+    def GetByte(self, offset = 0, noINC = False):
+        val = self.RAM[offset + self.PC]  # GETS INSTRUCTION AT PC BY ADDING SOME OFFSET SPECIFIED BY THE ADDRESSING MODE. FOR EXAMPLE, ABSOLUTE WOULD ASSEMBLE...
+        # ...A FULL ADDRESS BY OFFSETTING THE PROGRAM COUNTER BY 1 AND 2 BECAUSE IT WILL BE A 2 BYTE ADDRESS/NUMBER LIVING RIGHT AFTER THE OPCODE
+        if not noINC: #NEW CHANGE...
+            self.PC += 1 #INCREMENTS PROGRAM COUNTER PER BYTE FETCHED, MORE CYCLE ACCURATE THAN THE PREVIOUS VERSION WHERE I WOULD INCREASE IT ALL AT ONCE AT THE END OF THE INSTRUCTION
+        return val
     def IMP(self): #IMPLIED ADDRESSING, SO THERE ISNT REALLY AN OPERAND
         return 0 #HEY THAT ONE WAS PRETTY EASY!
     def IMM(self): #IMMEDIATE ADDRESSING, THE OPERAND IS THE NEXT BYTE
         return self.PC + 1
     def IND(self): #USED TO DEFERENCE FOR A JMP INSTRUCTION. IT JMPS TO THE ADDRESS FOUND ON THE ADDRESS THE PROGRAM TAKES IT
-        low = self.RAM[AssembleByte(self.GetByte(1), self.GetByte(2))] #DEREFENCES FOR THE LOW POINTER
-        high = self.RAM[(AssembleByte(self.GetByte(1), self.GetByte(2))) + 1] #DEFERENCES FOR THE HIGH POINTER
+        lb = self.GetByte()
+        hb = self.GetByte()
+        low = self.RAM[AssembleByte(lb, hb)] & 0xFF #DEREFENCES FOR THE LOW POINTER
+        high = self.RAM[(AssembleByte(lb, hb + 1))] &0xFF #DEFERENCES FOR THE HIGH POINTER
         return AssembleByte(low, high)
 
         #OKAY SO HERES SOMETHING FUNKY: TURNS OUT THE 6502 HAS A WEIRD BUG. WHEN THE LOW POINTER IS 256, OBVIOUSLY THE HIGH POINTER WOULD ADD ONE THUS CHANGING THE PAGE....
         #...BUT THE JUMP INSTRUCTION SIMPLY DOESNT DO THAT; IT IGNORES THE +1. PROBABLY WONT NEED TO IMPLEMENT THE BUG FOR NOW, BUT IT IS GOOD TO KNOW.
     def ABS(self): #ABSOLUTE ADDRESSING
-        return AssembleByte(self.GetByte(1), self.GetByte(2))
+        return AssembleByte(self.GetByte(), self.GetByte())
 
     def ABX(self): #ABSOLUTE ADDRESSING WITH AN X REGISTER OFFSET
-        return AssembleByte(self.GetByte(1), self.GetByte(2)) + self.IXX
+        return AssembleByte(self.GetByte(), self.GetByte()) + self.IXX
 
     def ABY(self): #ABSOLUTE ADDRESSING WITH A Y REGISTER OFFSET
-        return AssembleByte(self.GetByte(1), self.GetByte(2)) + self.IXY
+        return AssembleByte(self.GetByte(), self.GetByte()) + self.IXY
 
     def IZX(self): #INDIRECT ZERO-PAGE ADDRESSING WITH X REGISTER OFFSET
-        return self.ZeroPage(self.GetByte(1) + self.IXX)
+        return self.ZeroPage(self.GetByte() + self.IXX)
 
     def IZY(self): #SAME THING WITH Y-OFFSET, EXCEPT ITS ACTUALLY THE FINAL ADDRESS THATS OFFSET FOR SOME REASON
-        var = self.ZeroPage(self.GetByte(1))
+        var = self.ZeroPage(self.GetByte())
         return var + self.IXY
 
     def REL(self): #THIS ONES WEIRD...IT BASICALLY TAKES THE ADDRESS POINTED TO BY THE PC AND TURNS IT INTO A SIGNED OFFSET BETWEEN -128 AND 127
         #ALL WE NEED TO RETURN HERE IS THE BYTE CONVERTED TO SIGNED
        # if self.GetByte(1) & 0x80: #AND WITH BINARY 10000000, so we're basically checking if the number is 128 or bigger
-            return self.GetByte(1) - 0x100  if self.GetByte(1) & 0x80 else self.GetByte(1) #SUBTRACT 256 TO MAKE IT WRAP TO NEGATIVE
+            return self.GetByte() - 0x100  if self.GetByte() & 0x80 else self.GetByte() #SUBTRACT 256 TO MAKE IT WRAP TO NEGATIVE
         #else:
          #   return self.GetByte(1) #RETURN AS IS IF LESS THAN 128
     def ZP0(self): #THIS IS ONLY A ONE BYTE OPERAND SO I CANT JUST USE ZeroPage HERE, EXACT SAME PRINCIPLE THOUGH
-        return self.GetByte(1) & 0xFF
+        return self.GetByte() & 0x00FF
 
     #THESE ARE THE SAME BUT WITH X AND Y OFFSET
     def ZPX(self):
-        return (self.GetByte(1) + self.IXX) & 0xFF
+        return (self.GetByte(1) + self.IXX) & 0x00FF
     def ZPY(self):
-        return (self.GetByte(1) + self.IXY) & 0xFF
+        return (self.GetByte(1) + self.IXY) & 0x00FF
 
 
     #AND NOW, WE SHALL DO ALL THE OPCODES. THERE'S 200-SOMETHING POSSIBLE OPCODE ENTRIES ON THE 6502, BUT THERE ARE ONLY ABOUT 151 LEGAL ONES ON THE NES (56 ARE ACTUALLY...
@@ -178,9 +183,10 @@ class _6502:
     #THIS GETS THE DATA WE'RE WORKING WITH FOR AN OPCODE
     def fetch(self):
         opcode = self.RAM[self.PC]
-        #self.PC += 1
+        self.PC += 1
         Mode = operations[opcode][1]
-        Size = operations[opcode][2] #OKAY, IMPORTANT CAVEAT: THE 6502 INCREMENTS PC PER BYTE FETCHED. THAT MEANS IT INCREMENTS WHEN IT GETS THE OPCODE, AND...
+        #NEW: SIZE IS DEFUNCT!!!!!!!!
+        #Size = operations[opcode][2] #OKAY, IMPORTANT CAVEAT: THE 6502 INCREMENTS PC PER BYTE FETCHED. THAT MEANS IT INCREMENTS WHEN IT GETS THE OPCODE, AND...
         #...INCREMENTS ONCE FOR EVERY BYTE OF THE OPERAND ONCE IT GETS IT. HOWEVER, I'VE DECIDED TO GET DATA FROM THE ADDRESSING MODES BY LOOKING AHEAD BY AN OFFSET THAT IS...
         #...RELATIVE TO THE PC. THIS MAKES THE ASSUMPTION THAT THE PC IS ANCHORED AT THE OPCODE. THAT HAS AN EASY WORKAROUND OF SIMPLY GETTING THE NUMBER OF BYTES THAT THE...
         #...INSTRUCTION HAS & INCREMENTING BY THAT MUCH AT THE END OF FETCHING THE DATA, BUT IT'S NOT ENTIRELY ACCURATE TO HOW THE 6502 DOES THINGS EXACTLY. I DONT KNOW IF...
@@ -188,7 +194,7 @@ class _6502:
         #...WEIRD EDGE-CASES I AM NOT YET PRIVY TO.
         self.INDEX = self.read(Mode) #NOW THAT WE HAVE THE MODE, WE RUN IT THROUGH READ TO SET SELF.ADDR TO THE OPERAND, THE INDEX VARIABLE STORES THE RETURN INDEX OF INSTRUCTION
         #data = self.addr
-        self.PC += Size
+        #self.PC += Size
         #return data
         return Mode #sometimes we need to check if the ACC was used
     def clock(self):
