@@ -74,6 +74,7 @@ class _6502:
         self.AddCycle = [0, 0] #WILL ADD A CYCLE IF BOTH ELEMENTS ARE ONE. ADDRESSING MODE WILL TURN ON THE FIRST ELEMENT, THE INSTRUCTION WILL TURN ON THE SECOND
         self.AddrModes = {'IMP':self.IMP, 'IMM':self.IMM, 'ABS':self.ABS, 'ABX':self.ABX, 'ABY':self.ABY, 'IZX':self.IZX, 'IZY':self.IZY, 'REL':self.REL,
                           'ZP0': self.ZP0, 'ZPX':self.ZPX, 'ZPY': self.ZPY}
+        self.JumpAddress = 0 #jump needs special treatment in ABS mode
         #self.Instructions = {'ADC': self.ADC, 'SBC': self.SBC, 'AND': self.AND, 'ASL': self.ASL, 'BCC':self.BCC, 'BCS':self.BCS, 'BEQ': self.BEQ, 'BIT': self.BIT,
          #                    'BMI': self.BMI, 'BNE':self.BNE, 'BPL': self.BPL, 'BRK': self.BRK, 'BVC': self.BVC, 'BVS': self.BVS, 'CRC': self.CLC, 'CLD': self.CLD
     #A DETERMINER FUNCTION FOR KNOWING WHAT ADDRESS MODE WE'RE WORKING WITH AND THUS PERFORMING THE APPROPRIATE ADDRESSING MODE FUNCTION. THE ADDRESSING MODES ARE DEALT WITH...
@@ -89,12 +90,13 @@ class _6502:
 
     def read(self, mode):
         address = mode()
-        if mode == self.REL or mode == self.ABS or mode == self.ABX or mode == self.ABY or mode == self.ZP0 or mode == self.ZPX or mode == self.ZPY:
+        if mode == self.REL: # or mode == self.ABS or mode == self.ABX or mode == self.ABY or mode == self.ZP0 or mode == self.ZPX or mode == self.ZPY:
             print("heyup")
             self.addr = address
         else:
             self.addr = self.ACC if address == -1 else self.RAM[address]
         #self.PC += 1
+        self.JumpAddress = address
         return address #RETURNING THE INDEX OF RAM WE CHECK AT FOR THE SAKE OF WRITING CHANGES DIRECTLY TO MEMORY
     def write(self, data, address):
        # Mode = self.UseMode(mode)
@@ -134,7 +136,7 @@ class _6502:
     def IMM(self):
         val = self.PC
         self.PC += 1
-        #self.PC += 1#IMMEDIATE ADDRESSING, THE OPERAND IS THE NEXT BYTE
+        #IMMEDIATE ADDRESSING, THE OPERAND IS THE NEXT BYTE
         return val
     def IND(self): #USED TO DEFERENCE FOR A JMP INSTRUCTION. IT JMPS TO THE ADDRESS FOUND ON THE ADDRESS THE PROGRAM TAKES IT
         lb = self.GetByte()
@@ -205,33 +207,27 @@ class _6502:
         Mode = self.operations[opcode][1]
 
         return self.read(Mode) #NOW THAT WE HAVE THE MODE, WE RUN IT THROUGH READ TO SET SELF.ADDR TO THE OPERAND, THIS RETURNS THE RETURN INDEX OF INSTRUCTION
-    def start(self): #A METHOD TO CALL WHEN STARTING THE EXECUTION OF AN INSTRUCTION.
-        opcode = self.RAM[self.PC]
-        if opcode not in list(self.operations.keys()):
+   # def start(self): #A METHOD TO CALL WHEN STARTING THE EXECUTION OF AN INSTRUCTION.
+    #    opcode = self.RAM[self.PC]
+     #   if opcode not in list(self.operations.keys()):
          #   self.PC += 1
-            return
-        else:
-            (self.operations[opcode][0]())
+      #      return
+       # else:
+        #    (self.operations[opcode][0]())
 
     def clock(self):
 
         print("hi")
         if self.cycle == 0:
-            opcode = self.RAM[self.PC]  # A FUNCTION TELLING THE CPU THAT ONE CLOCK CYCLE HAS PASSED
-           # self.PC += 1
-            if opcode not in list(self.operations.keys()):
-                self.PC += 1
-                return
-            #self.PC += 1 #INCREMENT THE COUNTER, THE INSTRUCTION HAS BEEN COMPLETED IF CYCLES IS ZERO
+            opcode = self.RAM[self.PC]  # A FUNCTION TELLING THE CPU THAT ONE CLOCK CYCLE HAS PASSED. THIS IS THE HEART OF PROGRAM EXECUTION
             self.cycle = self.operations[opcode][3]
             #HANDLE ADDITIONAL CLOCK CYCLES:
-            self.start()
-            #self.PC += 1
-          #  if self.AddCycle[0] == 1:
-            #    if self.AddCycle[1] == 1:
-           #         self.cycle += 1
-             #   elif self.AddCycle[1] > 1:
-              #      self.cycle += 2
+            start = self.operations[opcode][0]() #START PC EXECUTION, OPCODE ZERO STORES THE INSTRUCTION
+            if self.AddCycle[0] == 1:
+                if self.AddCycle[1] == 1:
+                    self.cycle += 1
+                elif self.AddCycle[1] > 1:
+                    self.cycle += 2
             self.AddCycle = [0, 0]
             #LIMIT TO ONCE PER CYCLE FOR TESTING
 
@@ -325,7 +321,7 @@ class _6502:
         #BASICALLY, WE ARE CHECKING IF THE TWO NUMBERS THAT WE ADDED UP WOULD THEORETICALLY GIVE US A NEGATIVE NUMBER IF THEY WERE IN TWO'S COMPLEMENT. SINCE THE MAX...
         #...POSITIVE RANGE IN TWO's COMPLEMENT FOR 1 BYTE IS 127, IF THE ADDITION WAS GREATER THAN THAT, IT WOULD WRAP AROUND TO SOME OFFSET FROM -128. HENCE, WE JUST...
         #...NEED TO CHECK IF THE VALUE IS GREATER THAN 127. IN EVEN SIMPLER TERMS, WE'RE JUST CHECKING IF THE MOST SIGNIFICANT BIT WOULD BE ON
-        self.SetSignal('N', val > 127)
+        self.SetSignal('N', val & 0x80 != 0)
 
         #OKAY, THIS ONE'S A DOOZY...HOW DO WE CHECK FOR OVERFLOW? WELL, OVERFLOW OCCURS IN ONE OF TWO CASES, BOTH ASSUMING TWO'S COMPLEMENT LOGIC:
         #1. YOU ADDED TWO POSITIVE NUMBERS, BUT ENDED UP GETTING A NEGATIVE NUMBER
@@ -346,9 +342,9 @@ class _6502:
         base = self.ACC - self.addr
         val = base - (1-self.Flag['C'])
         self.ACC = val & 0x00FF
-        self.SetSignal('C', val < 0x0000) #IT COULD NEVER REACH THE UPPER LIMIT OF 255, SO HERE A CARRY OCCURS WHEN IT REACHES THE LOWER LIMIT OF 0
+        self.SetSignal('C', val > 0x0000) #IT COULD NEVER REACH THE UPPER LIMIT OF 255, SO HERE A CARRY OCCURS WHEN IT REACHES THE LOWER LIMIT OF 0
         self.SetSignal('Z', val & 0x00FF == 0)
-        self.SetSignal('N', val > 127)
+        self.SetSignal('N', val & 0x80 != 0)
         self.SetSignal('V', 0x0080 & ((self.ACC ^ self.addr) & ((self.ACC & self.addr) ^ val))) #HERE, IT IS THE SAME EXCEPT THE NOT FROM THE XOR IS REMOVED BECAUSE...
         #...OVERFLOW IN SUBTRACTION CAN ONLY OCCUR WHEN BOTH NUMBERS HAVE *DIFFERENT* MSBs, WHICH IS BECAUSE SUBTRACTING A FROM B IS THE SAME THING AS ADDING THE...
         #...COMPLEMENT OF A FROM B. SO, SUBTRACTING DIFFERENT MSBs BECOMES THE SAME AS ADDING THE SAME MSBs
@@ -398,9 +394,9 @@ class _6502:
     def BIT(self): #BIT TEST. Z,V, N. THIS OPERATION ONLY CHANGES FLAGS. IT PERFORMS A BITMASK OF ACC & ADDR, SETTING ZERO IF THE RESULT IS ZERO. V AND N ARE SIMPLY...
         #...THE VALUES OF BIT 6 AND 7 OF ADDR.
         self.fetch()
-        self.SetSignal('Z', ~(self.ACC & self.addr))
-        self.SetSignal('N', (self.addr & 0x0080))
-        self.SetSignal('V', (self.addr & 0x0040))
+        self.SetSignal('Z', (self.ACC & self.addr) == 0)
+        self.SetSignal('N', (self.addr & 0x0080) == 1)
+        self.SetSignal('V', (self.addr & 0x0040) == 1)
     def BMI(self): #BRANCH IF MINUS. SAME AS THE PREVIOUS BRANCHES FOR THE NEGATIVE FLAG
         self.fetch()
         if self.Flag['N']:
@@ -488,7 +484,7 @@ class _6502:
     def DEC(self):#DECREMENT MEMORY. SUBTRACT ONE FROM A MEMORY LOCATION. WRITES BACK TO MEMORY/ ACC.Z. N
 
         fetched = self.fetch()
-        self.write(self.addr - 1, fetched)
+        self.write((self.addr - 1), fetched)
         self.SetSignal('Z', self.addr - 1 == 0)
         self.SetSignal('N', ((self.addr - 1) & 0x80 != 0))
     def DEX(self): #DECREMENT X. SAME THING BUT FOR THE X REGISTER. Z, N
@@ -509,7 +505,7 @@ class _6502:
         self.AddCycle[1] = 1 #JUST LETTING THE CLOCK KNOW ABOUT POTENTIAL ADDITIONAL CYCLES ON ABX, ABY AND IZY
     def INC(self): #INCREMENT MEMORY. ADD ONE TO A MEMORY LOCATION. WRITES BACK TO MEMORY/ ACC. Z, N.
         fetched = self.fetch()
-        self.write(self.addr + 1, fetched)
+        self.write((self.addr + 1), fetched)
         self.SetSignal('Z', self.addr +1 == 0)
         self.SetSignal('N', ((self.addr+ 1) & 0x80!= 0))
     def INX(self): #INCREMENT X. SAME THING BUT FOR THE X REGISTER. Z, N.
@@ -526,12 +522,12 @@ class _6502:
 
     def JMP(self): #JUMP. PROGRAM COUNTER IS EQUAL TO THE SELF.ADDR.
         self.fetch()
-        self.PC = self.addr
+        self.PC = self.JumpAddress
     def JSR(self): #JUMP TO SUBROUTINE. PUSHES CURRENT PC TO STACK THEN SETS IT TO SELF.ADDR. USED WHEN YOU WANT TO BE ABLE TO GO BACK FROM WHERE YOU JUMPED.
         self.fetch()
         self.Push((self.PC>> 8)& 0xFF)
         self.Push(self.PC & 0xFF)
-        self.PC = self.addr
+        self.PC = self.JumpAddress
     def LDA(self): #LOAD A. LOADS SELF.ADDR INTO ACC. Z, N.
         self.fetch()
         self.ACC = self.addr
@@ -609,10 +605,15 @@ class _6502:
         self.fetch()
         byte = self.Pop()
         self.BreakSF(byte)
-        self.PC = self.Pop() + (self.Pop() << 8) #HIGH BYTE COMES IN SECOND, SO IT NEEDS TO BE ASSEMBLED CORRECTLY
+        low = self.Pop()
+        high = self.Pop()
+
+        self.PC = AssembleByte(low, high)#HIGH BYTE COMES IN SECOND, SO IT NEEDS TO BE ASSEMBLED CORRECTLY
     def RTS(self): #RETURN FROM SUBROUTINE. POPS ADDRESS FROM STACK INTO PC, THEN INCREMENTS
         self.fetch()
-        self.PC = self.Pop()
+        low = self.Pop()
+        high = self.Pop()
+        self.PC = AssembleByte(low, high)
         self.PC += 1
     def SEC(self): #SET CARRY
         self.fetch()
@@ -659,4 +660,4 @@ while True:
     #print(hex(cpu.ACC), hex(cpu.IXX), hex(cpu.IXY), hex(cpu.SP), hex(cpu.addr), hex(cpu.PC), hex(cpu.RAM[cpu.PC+1]), hex(cpu.RAM[(cpu.PC)]), hex(cpu.RAM[cpu.PC+2]))
     cpu.clock()
     print(hex(cpu.ACC), hex(cpu.IXX), hex(cpu.IXY), hex(cpu.SP), hex(cpu.addr), hex(cpu.PC), hex(cpu.RAM[(cpu.PC) & 0xFFFF]), hex(cpu.RAM[(cpu.PC+1) & 0xFFFF]), hex(cpu.RAM[(cpu.PC+2) & 0xFFFF]))
-    time.sleep(0.1)
+    #time.sleep(0.1)
