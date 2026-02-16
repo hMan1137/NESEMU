@@ -89,7 +89,7 @@ class _6502:
 
     def read(self, mode):
         address = mode()
-        if mode == self.REL:
+        if mode == self.REL or mode == self.ABS or mode == self.ABX or mode == self.ABY or mode == self.ZP0 or mode == self.ZPX or mode == self.ZPY:
             print("heyup")
             self.addr = address
         else:
