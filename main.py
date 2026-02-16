@@ -94,13 +94,14 @@ class _6502:
             self.addr = address
         else:
             self.addr = self.ACC if address == -1 else self.RAM[address]
-            return address #RETURNING THE INDEX OF RAM WE CHECK AT FOR THE SAKE OF WRITING CHANGES DIRECTLY TO MEMORY
+        #self.PC += 1
+        return address #RETURNING THE INDEX OF RAM WE CHECK AT FOR THE SAKE OF WRITING CHANGES DIRECTLY TO MEMORY
     def write(self, data, address):
        # Mode = self.UseMode(mode)
        if address== -1:
            self.ACC = data
        else:
-           self.RAM[address & 0xFF] = data & 0xFF
+           self.RAM[address] = data
     #WRITES AT THE CURRENT INDEX BEFORE THE PC INCREMENTS
 
     #OKAY, THIS IS IMPORTANT. WE NEED TO WORK ON ALL THE ADDRESSING MODES. THE NES HAS APPROXIMATELY ONE BAJILLION OF THEM
@@ -130,8 +131,11 @@ class _6502:
         return 0 #HEY THAT ONE WAS PRETTY EASY!
     def AC1(self):
         return -1
-    def IMM(self): #IMMEDIATE ADDRESSING, THE OPERAND IS THE NEXT BYTE
-        return self.PC
+    def IMM(self):
+        val = self.PC
+        self.PC += 1
+        #self.PC += 1#IMMEDIATE ADDRESSING, THE OPERAND IS THE NEXT BYTE
+        return val
     def IND(self): #USED TO DEFERENCE FOR A JMP INSTRUCTION. IT JMPS TO THE ADDRESS FOUND ON THE ADDRESS THE PROGRAM TAKES IT
         lb = self.GetByte()
         hb = self.GetByte()
@@ -171,8 +175,11 @@ class _6502:
             val =self.GetByte()
             print("hiiiii")
             self.AddCycle[0] = 1
-            return val - 0x100  if val & 0x80 else val #SUBTRACT 256 TO MAKE IT WRAP TO NEGATIVE
-            #WE ARE RETURNING A LIST BECAUSE THE RELATIVE ADDRESS NEEDS TO BE HANDLED IN A DIFFERENT WAY IN THE READ FUNCTION.THE LIST ACTS AS A UNIQUE IDENTIFIER
+            #if val & 0x80:
+             #   val |= 0xFF00
+
+            return val - 0x100 if val & 0x80 else val #SUBTRACT 256 TO MAKE IT WRAP TO NEGATIVE
+
         #else:
          #   return self.GetByte(1) #RETURN AS IS IF LESS THAN 128
     def ZP0(self): #THIS IS ONLY A ONE BYTE OPERAND SO I CANT JUST USE ZeroPage HERE, EXACT SAME PRINCIPLE THOUGH
@@ -200,22 +207,31 @@ class _6502:
         return self.read(Mode) #NOW THAT WE HAVE THE MODE, WE RUN IT THROUGH READ TO SET SELF.ADDR TO THE OPERAND, THIS RETURNS THE RETURN INDEX OF INSTRUCTION
     def start(self): #A METHOD TO CALL WHEN STARTING THE EXECUTION OF AN INSTRUCTION.
         opcode = self.RAM[self.PC]
-        (self.operations[opcode][0]())
-    def clock(self):
-        opcode =self.RAM[self.PC] #A FUNCTION TELLING THE CPU THAT ONE CLOCK CYCLE HAS PASSED
         if opcode not in list(self.operations.keys()):
-            self.PC += 1
+         #   self.PC += 1
+            return
+        else:
+            (self.operations[opcode][0]())
+
+    def clock(self):
+
         print("hi")
         if self.cycle == 0:
-           # self.PC += 1 #INCREMENT THE COUNTER, THE INSTRUCTION HAS BEEN COMPLETED IF CYCLES IS ZERO
+            opcode = self.RAM[self.PC]  # A FUNCTION TELLING THE CPU THAT ONE CLOCK CYCLE HAS PASSED
+           # self.PC += 1
+            if opcode not in list(self.operations.keys()):
+                self.PC += 1
+                return
+            #self.PC += 1 #INCREMENT THE COUNTER, THE INSTRUCTION HAS BEEN COMPLETED IF CYCLES IS ZERO
             self.cycle = self.operations[opcode][3]
             #HANDLE ADDITIONAL CLOCK CYCLES:
             self.start()
-            if self.AddCycle[0] == 1:
-                if self.AddCycle[1] == 1:
-                    self.cycle += 1
-                elif self.AddCycle[1] > 1:
-                    self.cycle += 2
+            #self.PC += 1
+          #  if self.AddCycle[0] == 1:
+            #    if self.AddCycle[1] == 1:
+           #         self.cycle += 1
+             #   elif self.AddCycle[1] > 1:
+              #      self.cycle += 2
             self.AddCycle = [0, 0]
             #LIMIT TO ONCE PER CYCLE FOR TESTING
 
@@ -394,13 +410,16 @@ class _6502:
             self.PC += self.addr
     def BNE(self): #BRANCH IF NOT EQUAL. (THE ZERO FLAG IS CLEAR)
         self.fetch()
-        print("hiiiiiiiiiiiiiii")
+        #print("hiiiiiiiiiiiiiii")
         if not self.Flag['Z']:
-            print("heyyyyy")
+           # print("heyyyyy")
             self.AddCycle[1] = 1  # ADDS A CYCLE IF BRANCH IS FULL
             if (self.PC + self.addr) & 0xFF < self.PC: #A PAGE BOUNDARY HAS BEEN CROSSED
                 self.AddCycle[1] = 2 #ADDS TWO CYCLES INSTEAD
+            print(self.PC)
             self.PC += self.addr
+            print(self.PC)
+
     def BPL(self): #BRANCH IF PLUS. (THE NEGATIVE FLAG IS CLEAR)
         self.fetch()
         if not self.Flag['N']:
@@ -449,6 +468,7 @@ class _6502:
     def CMP(self): #COMPARE A. COMPARES ACC WITH A VALUE IN MEMORY, SETTING FLAGS AS APPROPRIATE. C, Z, N
         self.fetch()
         val = self.ACC - self.addr
+        print(val)
         self.SetSignal('C', val >= 0)
         self.SetSignal('Z', val == 0)
         self.SetSignal('N', val < 0)
@@ -509,7 +529,7 @@ class _6502:
         self.PC = self.addr
     def JSR(self): #JUMP TO SUBROUTINE. PUSHES CURRENT PC TO STACK THEN SETS IT TO SELF.ADDR. USED WHEN YOU WANT TO BE ABLE TO GO BACK FROM WHERE YOU JUMPED.
         self.fetch()
-        self.Push((self.PC<< 8)& 0xFF)
+        self.Push((self.PC>> 8)& 0xFF)
         self.Push(self.PC & 0xFF)
         self.PC = self.addr
     def LDA(self): #LOAD A. LOADS SELF.ADDR INTO ACC. Z, N.
@@ -638,5 +658,5 @@ while True:
 
     #print(hex(cpu.ACC), hex(cpu.IXX), hex(cpu.IXY), hex(cpu.SP), hex(cpu.addr), hex(cpu.PC), hex(cpu.RAM[cpu.PC+1]), hex(cpu.RAM[(cpu.PC)]), hex(cpu.RAM[cpu.PC+2]))
     cpu.clock()
-    print(hex(cpu.ACC), hex(cpu.IXX), hex(cpu.IXY), hex(cpu.SP), hex(cpu.addr), hex(cpu.PC), hex(cpu.RAM[(cpu.PC+1) & 0xFFFF]), hex(cpu.RAM[(cpu.PC) & 0xFFFF]), hex(cpu.RAM[(cpu.PC+2) & 0xFFFF]))
+    print(hex(cpu.ACC), hex(cpu.IXX), hex(cpu.IXY), hex(cpu.SP), hex(cpu.addr), hex(cpu.PC), hex(cpu.RAM[(cpu.PC) & 0xFFFF]), hex(cpu.RAM[(cpu.PC+1) & 0xFFFF]), hex(cpu.RAM[(cpu.PC+2) & 0xFFFF]))
     time.sleep(0.1)
