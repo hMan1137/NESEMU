@@ -152,11 +152,15 @@ class _6502:
         lb = self.GetByte()
         hb = self.GetByte()
         low = self.RAM[AssembleByte(lb, hb)] & 0xFF #DEREFENCES FOR THE LOW POINTER
-        high = self.RAM[(AssembleByte(lb, hb + 1))] &0xFF #DEFERENCES FOR THE HIGH POINTER
+        #high = self.RAM[(AssembleByte(lb, hb + 1))] &0xFF #DEFERENCES FOR THE HIGH POINTER
+        #full = AssembleByte(low, high)
+        if low == 0x00FF: #MEANING HIGH WOULD OTHERWISE CROSS A PAGE BOUNDARY
+            high = self.RAM[(AssembleByte(lb, hb))] & 0x00FF #DEFERENCES FOR THE HIGH POINTER KEEPING THE BUG IN MIND
+        else:
+            high = self.RAM[(AssembleByte(lb, hb))+1] & 0x00FF  # DEFERENCES FOR THE HIGH POINTER NORMALLY
         return AssembleByte(low, high)
 
-        #OKAY SO HERES SOMETHING FUNKY: TURNS OUT THE 6502 HAS A WEIRD BUG. WHEN THE LOW POINTER IS 256, OBVIOUSLY THE HIGH POINTER WOULD ADD ONE THUS CHANGING THE PAGE....
-        #...BUT THE JUMP INSTRUCTION SIMPLY DOESNT DO THAT; IT IGNORES THE +1. PROBABLY WONT NEED TO IMPLEMENT THE BUG FOR NOW, BUT IT IS GOOD TO KNOW.
+        #NEW: IMPLEMENTED THE BUG
     def ABS(self): #ABSOLUTE ADDRESSING
         return AssembleByte(self.GetByte(), self.GetByte())
 
@@ -681,7 +685,7 @@ while True:
     cpu.clock()
     print(hex(cpu.ACC), hex(cpu.IXX), hex(cpu.IXY), hex(cpu.SP), hex(cpu.addr), hex(cpu.PC), hex(cpu.RAM[(cpu.PC) & 0xFFFF]), hex(cpu.RAM[(cpu.PC+1) & 0xFFFF]), hex(cpu.RAM[(cpu.PC+2) & 0xFFFF]))
     print(cpu.Flag)
-  #  if cpu.PC == 0x674:
-   #     break
+    if cpu.PC == 0x378a:
+        break
 
     #time.sleep(0.00001)
