@@ -69,7 +69,7 @@ class _6502:
         self.PC = AssembleByte(self.RAM[0xFFFC], self.RAM[0xFFFD]) #THIS IS WHERE THE RESET POSITION FOR THE PC IS LOCATED. USUALLY IT'S EQUAL TO 0x8000 BUT ITS MORE...
         #...INTELLIGENT TO MATHEMATICALLY CALCULATE IT LIKE THE 6502 DID SINCE ITS NOT ACTUALLY A HARD-CODED THING, SO THERE COULD BE A WEIRD CASE WHERE IT DOES NOT...
         #...RESET TO 0x8000
-        self.PC = 0x08D9 #REQUIRED FOR THIS TEST ROM SPECIFICALLY
+        self.PC = 0x0400 #REQUIRED FOR THIS TEST ROM SPECIFICALLY
         self.cycle = 0 #A VARIABLE COUNTING DOWN ON THE NUMBER OF CLOCK CYCLES LEFT ON AN INSTRUCTION. NEEDED TO KNOW WHEN IT CAN LEGALLY MOVE ON TO THE NEXT INSTRUCTION
         self.AddCycle = [0, 0] #WILL ADD A CYCLE IF BOTH ELEMENTS ARE ONE. ADDRESSING MODE WILL TURN ON THE FIRST ELEMENT, THE INSTRUCTION WILL TURN ON THE SECOND
         self.AddrModes = {'IMP':self.IMP, 'IMM':self.IMM, 'ABS':self.ABS, 'ABX':self.ABX, 'ABY':self.ABY, 'IZX':self.IZX, 'IZY':self.IZY, 'REL':self.REL,
@@ -95,15 +95,25 @@ class _6502:
             self.addr = address
         else:
             self.addr = self.ACC if address == -1 else self.RAM[address]
+
         #self.PC += 1
         self.JumpAddress = address
         return address #RETURNING THE INDEX OF RAM WE CHECK AT FOR THE SAKE OF WRITING CHANGES DIRECTLY TO MEMORY
-    def write(self, data, address):
+    def write(self, data, address, x = False, y = False):
        # Mode = self.UseMode(mode)
+       if True:
+           if x:
+               self.IXX = data
+               self.IXX &= 0xFF
+           if y:
+               self.IXY = data
+               self.IXY &= 0xFF
        if address== -1:
            self.ACC = data
+           self.ACC &= 0xFF
+
        else:
-           self.RAM[address] = data
+           self.RAM[address] = data & 0xFF
     #WRITES AT THE CURRENT INDEX BEFORE THE PC INCREMENTS
 
     #OKAY, THIS IS IMPORTANT. WE NEED TO WORK ON ALL THE ADDRESSING MODES. THE NES HAS APPROXIMATELY ONE BAJILLION OF THEM
@@ -278,7 +288,9 @@ class _6502:
 
     def Pop(self):
         self.SP += 1
-        return self.RAM[self.SP | 0x100]
+        val =self.RAM[self.SP | 0x100]
+        #self.SP += 1
+        return val
 
     #A SIMPLE FUNCTION TO TURN A SPECIFIC FLAG ON OR OFF WHEN CALLED
     def SetSignal(self, F, on):    #WE WILL DEFINE WHAT ALL THE BITS IN THE STATUS FLAG CORRESPOND TO
@@ -351,7 +363,7 @@ class _6502:
         self.AddCycle[1] = 1 #JUST LETTING THE CLOCK KNOW ABOUT POTENTIAL ADDITIONAL CYCLES ON ABX, ABY AND IZY
     def AND(self): #BITWISE AND. Z, N
         self.fetch()
-        self.ACC = self.ACC & self.addr
+        self.ACC = self.ACC & self.addr & 0xFF
         self.SetSignal('N', self.ACC & 0x80 != 0)
         self.SetSignal('Z', self.ACC & 0x00FF == 0)
         self.AddCycle[1] = 1 #JUST LETTING THE CLOCK KNOW ABOUT POTENTIAL ADDITIONAL CYCLES ON ABX, ABY AND IZY
@@ -463,38 +475,43 @@ class _6502:
         self.SetSignal('V', 0)
     def CMP(self): #COMPARE A. COMPARES ACC WITH A VALUE IN MEMORY, SETTING FLAGS AS APPROPRIATE. C, Z, N
         self.fetch()
-        val = self.ACC - self.addr
+        val = (self.ACC - self.addr) & 0xFF
         print(val)
-        self.SetSignal('C', val >= 0)
+
         self.SetSignal('Z', val == 0)
-        self.SetSignal('N', val < 0)
+        self.SetSignal('N', val & 0x80 != 0)
+        self.SetSignal('C', not self.Flag['N'])
         self.AddCycle[1] = 1 #JUST LETTING THE CLOCK KNOW ABOUT POTENTIAL ADDITIONAL CYCLES ON ABX, ABY AND IZY
     def CPX(self): #COMPARE X. SAME THING WITH REGISTER X. C, Z, N
         self.fetch()
-        val = self.IXX - self.addr
-        self.SetSignal('C', val >= 0)
+        val = (self.IXX - self.addr) & 0xFF
+       # self.SetSignal('C', val & 0x80 >= 0)
         self.SetSignal('Z', val == 0)
-        self.SetSignal('N', val < 0)
+        self.SetSignal('N', val &0x80 != 0)
+        self.SetSignal('C', not self.Flag['N'])
     def CPY(self): #COMPARE Y. SAME THING WITH REGISTER Y. C, Z, N
         self.fetch()
-        val = self.IXY - self.addr
-        self.SetSignal('C', val >= 0)
+        val = (self.IXY - self.addr) & 0xFF
+        #self.SetSignal('C', val & 0x80 >= 0)
         self.SetSignal('Z', val == 0)
-        self.SetSignal('N', val < 0)
+        self.SetSignal('N', val & 0x80 != 0)
+        self.SetSignal('C', not self.Flag['N'])
     def DEC(self):#DECREMENT MEMORY. SUBTRACT ONE FROM A MEMORY LOCATION. WRITES BACK TO MEMORY/ ACC.Z. N
 
         fetched = self.fetch()
         self.write((self.addr - 1), fetched)
-        self.SetSignal('Z', self.addr - 1 == 0)
-        self.SetSignal('N', ((self.addr - 1) & 0x80 != 0))
+        self.SetSignal('Z', (self.addr - 1) & 0xFF == 0)
+        self.SetSignal('N', ((self.addr - 1) & 0xFF & 0x80 != 0))
     def DEX(self): #DECREMENT X. SAME THING BUT FOR THE X REGISTER. Z, N
         self.fetch()
         self.IXX -= 1
+        self.IXX &= 0xFF
         self.SetSignal('Z', self.IXX== 0)
         self.SetSignal('N', (self.IXX & 0x80 != 0))
     def DEY(self): #DECREMENT Y. SAME THING BUT FOR THE Y REGISTER. Z, N
         self.fetch()
         self.IXY -= 1
+        self.IXY &= 0xFF
         self.SetSignal('Z', self.IXY== 0)
         self.SetSignal('N', (self.IXY & 0x80 != 0))
     def EOR(self): #EXCLUSIVE OR. EORs BETWEEN ACC AND ADDR, SETTING REGISTERS APPROPRIATELY. Z,N.
@@ -507,16 +524,18 @@ class _6502:
         fetched = self.fetch()
         self.write((self.addr + 1), fetched)
         self.SetSignal('Z', self.addr +1 == 0)
-        self.SetSignal('N', ((self.addr+ 1) & 0x80!= 0))
+        self.SetSignal('N', ((self.addr+ 1) & 0xFF & 0x80!= 0))
     def INX(self): #INCREMENT X. SAME THING BUT FOR THE X REGISTER. Z, N.
         self.fetch()
         self.IXX += 1
+        self.IXX &= 0xFF
         self.SetSignal('Z', self.IXX == 0)
         self.SetSignal('N', (self.IXX & 0x80 != 0))
 
     def INY(self):  # DECREMENT Y. SAME THING BUT FOR THE Y REGISTER. Z, N
         self.fetch()
         self.IXY += 1
+        self.IXX &= 0xFF
         self.SetSignal('Z', self.IXY == 0)
         self.SetSignal('N', (self.IXY & 0x80 != 0))
 
@@ -535,14 +554,14 @@ class _6502:
         self.SetSignal('N', self.ACC & 0x80 !=0)
         self.AddCycle[1] = 1 #JUST LETTING THE CLOCK KNOW ABOUT POTENTIAL ADDITIONAL CYCLES ON ABX, ABY AND IZY
     def LDX(self): #LOAD Y. LOADS SELF.ADDR INTO Y. Z, N.
-        self.fetch()
-        self.IXX = self.addr
+        fetched = self.fetch()
+        self.write(self.addr,fetched, True)
         self.SetSignal('Z', self.IXX == 0)
         self.SetSignal('N', self.IXX & 0x80 !=0)
         self.AddCycle[1] = 1 #JUST LETTING THE CLOCK KNOW ABOUT POTENTIAL ADDITIONAL CYCLES ON ABY
     def LDY(self): #LOAD Y. LOADS SELF.ADDR INTO Y. Z, N.
-        self.fetch()
-        self.IXY = self.addr
+        fetched =self.fetch()
+        self.write(self.addr, fetched, False, True)
         self.SetSignal('Z', self.IXY == 0)
         self.SetSignal('N', self.IXY &0x80 != 0)
         self.AddCycle[1] = 1 #JUST LETTING THE CLOCK KNOW ABOUT POTENTIAL ADDITIONAL CYCLES ON ABX
@@ -568,6 +587,7 @@ class _6502:
     def PHP(self): #PUSH PROCESSOR STATUS. PUSHES THE STATUS FLAGS AND PUSHES B AS 1. B
         self.fetch()
         self.SetSignal('B', True)
+        self.SetSignal(1, True)
         self.Push(self.MakeSF())
     def PLA(self): #PULL A. POPS FROM STACK POINTER AND LOADS INTO ACC. Z, N.
         self.fetch()
@@ -660,4 +680,8 @@ while True:
     #print(hex(cpu.ACC), hex(cpu.IXX), hex(cpu.IXY), hex(cpu.SP), hex(cpu.addr), hex(cpu.PC), hex(cpu.RAM[cpu.PC+1]), hex(cpu.RAM[(cpu.PC)]), hex(cpu.RAM[cpu.PC+2]))
     cpu.clock()
     print(hex(cpu.ACC), hex(cpu.IXX), hex(cpu.IXY), hex(cpu.SP), hex(cpu.addr), hex(cpu.PC), hex(cpu.RAM[(cpu.PC) & 0xFFFF]), hex(cpu.RAM[(cpu.PC+1) & 0xFFFF]), hex(cpu.RAM[(cpu.PC+2) & 0xFFFF]))
-    #time.sleep(0.1)
+    print(cpu.Flag)
+  #  if cpu.PC == 0x674:
+   #     break
+
+    #time.sleep(0.00001)
