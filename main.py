@@ -312,14 +312,14 @@ class _6502:
     #EACH INSTRUCTION HAS A SPECIFIC NUMBER OF FLAGS THAT ITS CAPABLE OF TURNING ON OR OFF DEPENDING ON THE RESULT. I HAVE MENTIONED ALL THE FLAGS NEXT TO EACH INSTRUCTION
     #HERE ARE THE ACTUAL INSTRUCTIONS
     def MakeSF(self): #GENERATES A STATUS FLAG BYTE BASED ON THE FLAGS THAT ARE ON OR OFF. THIS IS SOMETIMES NEEDED IN CERTAIN INSTRUCTIONS
-        return 0x80 * self.Flag['N'] + 0x40 * self.Flag['V'] + 0x20 * self.Flag[1] + 0x10 * self.Flag['B'] + 0x08 * self.Flag['D'] + 0x04 * self.Flag['I'] + 0x02 * self.Flag['Z'] + 0x01 * self.Flag['C']
+        return 0x80 * self.Flag['N'] + 0x40 * self.Flag['V'] + 0x20 + 0x10 * self.Flag['B'] + 0x08 * self.Flag['D'] + 0x04 * self.Flag['I'] + 0x02 * self.Flag['Z'] + 0x01 * self.Flag['C']
     def BreakSF(self, byte): #GENERATES STATUS FLAGS FROM A STATUS FLAG BYTE
         self.SetSignal('C', byte & 0x01 > 0)
         self.SetSignal('Z', byte & 0x02 > 0)
         self.SetSignal('I', byte & 0x04 > 0)
         self.SetSignal('D', byte & 0x08 > 0)
         self.SetSignal('B', byte & 0x10 > 0)
-        self.SetSignal(1 , byte & 0x20 > 0)
+        self.SetSignal(1 , True)
         self.SetSignal('V', byte & 0x40 > 0)
         self.SetSignal('N', byte & 0x80 > 0)
     def ADC(self): #ADD WITH CARRY. C, V, N, Z
@@ -548,8 +548,8 @@ class _6502:
         self.PC = self.JumpAddress
     def JSR(self): #JUMP TO SUBROUTINE. PUSHES CURRENT PC TO STACK THEN SETS IT TO SELF.ADDR. USED WHEN YOU WANT TO BE ABLE TO GO BACK FROM WHERE YOU JUMPED.
         self.fetch()
-        self.Push((self.PC>> 8)& 0xFF)
-        self.Push(self.PC & 0xFF)
+        self.Push(((self.PC - 1)>> 8)& 0xFF) #THE WAY THE EMULATOR IS DESIGNED,THE PC ALREADY INCREMENTS PAST THE OPERAND, SO IT GOES UP ONE ABOVE THE VALUE WE WANT (PC + 2)
+        self.Push((self.PC -1) & 0xFF)
         self.PC = self.JumpAddress
     def LDA(self): #LOAD A. LOADS SELF.ADDR INTO ACC. Z, N.
         self.fetch()
@@ -602,7 +602,9 @@ class _6502:
         #NOTE THAT THE VALUE OF I CHANGING WILL TAKE EFFECT IN THE NEXT CYCLE, NOT IMMEDIATELY. IMPLEMENT THIS!!!
         self.fetch()
         byte = self.Pop()
+        B = self.Flag['B'] #B NEEDS TO BE RESTORED AFTERWARDS BECAUSE B IS ACTUALLY IGNORED IN THE EMULATOR
         self.BreakSF(byte) #BREAKSF TAKES A BYTE REPRESENTING THE STATUS FLAGS AND CONVERTS THEM INTO THE DICTIONARY FLAGS BEING USED IN THE EMULATION
+        self.SetSignal('B', B)
     def ROL(self): #SHIFTS ACC/ADDR TO THE LEFT, BUT ACTS AS IF THE CARRY BIT IS BOTH BELOW BIT 0 AND ABOVE BIT 7. CARRY IS SHIFTED TO BIT 0, AND BIT 7 IS THEN...
         #SHIFTED TO CARRY. THIS INSTRUCTION WRITES BACK TO MEMORY/ACC. C, Z, N.
         fetched = self.fetch()
@@ -685,7 +687,10 @@ while True:
     cpu.clock()
     print(hex(cpu.ACC), hex(cpu.IXX), hex(cpu.IXY), hex(cpu.SP), hex(cpu.addr), hex(cpu.PC), hex(cpu.RAM[(cpu.PC) & 0xFFFF]), hex(cpu.RAM[(cpu.PC+1) & 0xFFFF]), hex(cpu.RAM[(cpu.PC+2) & 0xFFFF]))
     print(cpu.Flag)
+    print([hex(cpu.RAM[0x01FA]), hex(cpu.RAM[0x01FB]), hex(cpu.RAM[0x01FC]), hex(cpu.RAM[0x01FD]), hex(cpu.RAM[0x01FE]), hex(cpu.RAM[0x01FF])] )#, hex(cpu.RAM[0x01F5]), hex(cpu.RAM[0x01F5]))
     if cpu.PC == 0x378a:
+        print(hex(cpu.RAM[0x01FE]))
         break
 
+    #time.sleep(0.00001)
     #time.sleep(0.00001)
