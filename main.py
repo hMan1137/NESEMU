@@ -539,7 +539,7 @@ class _6502:
     def INY(self):  # DECREMENT Y. SAME THING BUT FOR THE Y REGISTER. Z, N
         self.fetch()
         self.IXY += 1
-        self.IXX &= 0xFF
+        self.IXY &= 0xFF
         self.SetSignal('Z', self.IXY == 0)
         self.SetSignal('N', (self.IXY & 0x80 != 0))
 
@@ -688,8 +688,8 @@ while True:
     print(hex(cpu.ACC), hex(cpu.IXX), hex(cpu.IXY), hex(cpu.SP), hex(cpu.addr), hex(cpu.PC), hex(cpu.RAM[(cpu.PC) & 0xFFFF]), hex(cpu.RAM[(cpu.PC+1) & 0xFFFF]), hex(cpu.RAM[(cpu.PC+2) & 0xFFFF]))
     print(cpu.Flag)
     print([hex(cpu.RAM[0x01FA]), hex(cpu.RAM[0x01FB]), hex(cpu.RAM[0x01FC]), hex(cpu.RAM[0x01FD]), hex(cpu.RAM[0x01FE]), hex(cpu.RAM[0x01FF])] )#, hex(cpu.RAM[0x01F5]), hex(cpu.RAM[0x01F5]))
-    if cpu.PC == 0x378a:
-        print(hex(cpu.RAM[0x01FE]))
+    if cpu.PC == 0xBED:
+     #   print(hex(cpu.RAM[0x01FE]))
         break
 
     #time.sleep(0.00001)
