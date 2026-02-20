@@ -168,7 +168,7 @@ class _6502:
         val = AssembleByte(self.GetByte(), self.GetByte())
         if (val + self.IXX) & 0xFF < val:
             self.AddCycle[0] = 1 #PAGE BOUNDARY HAS BEEN CROSSED
-        return val + self.IXX
+        return (val + self.IXX) & 0xFFFF
 
     def ABY(self): #ABSOLUTE ADDRESSING WITH A Y REGISTER OFFSET
         val = AssembleByte(self.GetByte(), self.GetByte())
@@ -289,9 +289,11 @@ class _6502:
         self.RAM[self.SP | 0x100] = data
         # SP COUNTS BACKWARDS SO IT DECREMENTS
         self.SP -= 1
+        self.SP &= 0xFF
 
     def Pop(self):
         self.SP += 1
+        self.SP &= 0xFF
         val =self.RAM[self.SP | 0x100]
         #self.SP += 1
         return val
@@ -324,6 +326,7 @@ class _6502:
         self.SetSignal('N', byte & 0x80 > 0)
     def ADC(self): #ADD WITH CARRY. C, V, N, Z
         #THIS FUNCTION IS BY FAR THE BIGGEST HEADACHE TO FIGURE OUT
+        print("poopy")
         self.fetch()
         base = self.addr + self.ACC
         val = base + (self.Flag['C']) #NEEDS TO ADD THE VALUE OF THE CARRY
@@ -353,7 +356,7 @@ class _6502:
         self.AddCycle[1] = 1 #JUST LETTING THE CLOCK KNOW ABOUT POTENTIAL ADDITIONAL CYCLES ON ABX, ABY AND IZY
     def SBC(self): #SUBTRACT WITH BORROW, C, V, N, Z
         #BORROW EFFECTIVELY MEANS NOT(CARRY)
-
+        print("poopy2")
         self.fetch()
         base = self.ACC - self.addr
         val = base - (1-self.Flag['C'])
@@ -372,6 +375,7 @@ class _6502:
         self.SetSignal('Z', self.ACC & 0x00FF == 0)
         self.AddCycle[1] = 1 #JUST LETTING THE CLOCK KNOW ABOUT POTENTIAL ADDITIONAL CYCLES ON ABX, ABY AND IZY
     def ASL(self): #ARITHMETIC LEFT SHIFT TO EITHER ACC OR VALUE. C, Z, N
+        print("asl")
         mode = self.fetch()
         if mode == self.ACC:
             #THE CARRY IS SET IF THE INITIAL VALUE HAD BIT 7 ON
@@ -445,10 +449,12 @@ class _6502:
         self.Push((self.PC >> 8) & 0xFF) #GETS THE HIGH BYTE FIRST
         self.Push(self.PC & 0xFF) #GETS THE LOW BYTE SECOND
         #WE PUSH IT IN LITTLE ENDIAN WHEN THE MEMORY HOLDS BIG ENDIAN, BUT IT WORKS OUT SINCE THE STACK COUNTS BACKWARDS
-        self.Push(self.MakeSF())
-        #INTERRUPT DISABLE AND B IS SET TO 1 AFTER PUSHING
-        self.SetSignal('I', 1)
+        #BREAK PUSHED AS 1
         self.SetSignal('B', 1)
+        self.Push(self.MakeSF())
+        self.SetSignal('I', 1) #I SET TO ONE AFTER THE FACT
+
+
         self.PC = AssembleByte(self.RAM[0xFFFE], self.RAM[0xFFFF])
         #THIS INTERRUPT IS TECHNICALLY NON MASKABLE, SO ITS USEFUL AS A SOFT INTERRUPT THAT A PROGRAM CAN EXECUTE AT ANY TIME, MAINLY FOR CRASH HANDLING
     def BVC(self): #BRANCH IF OVERFLOW CLEAR.
@@ -467,16 +473,16 @@ class _6502:
             self.PC += self.addr
     def CLC(self): #CLEAR THE CARRY. SELF EXPLANATORY
         self.fetch()
-        self.SetSignal('C', 0)
+        self.SetSignal('C', False)
     def CLD(self): #CLEAR THE DECIMAL. THIS WAS USUALLY USED TO ENABLE BCD, BUT THIS IS DISABLED IN THE NES. IT IS, HOWEVER, STILL THERE FOR STATE-STORAGE
         self.fetch()
-        self.SetSignal('D', 0)
+        self.SetSignal('D', False)
     def CLI(self): #ClEAR THE INTERRUPT DISABLE
         self.fetch()
-        self.SetSignal('I', 0)
+        self.SetSignal('I', False)
     def CLV(self): #CLEAR THE OVERFLOW
         self.fetch()
-        self.SetSignal('V', 0)
+        self.SetSignal('V', False)
     def CMP(self): #COMPARE A. COMPARES ACC WITH A VALUE IN MEMORY, SETTING FLAGS AS APPROPRIATE. C, Z, N
         self.fetch()
         val = (self.ACC - self.addr) & 0xFF
@@ -484,7 +490,7 @@ class _6502:
 
         self.SetSignal('Z', val == 0)
         self.SetSignal('N', val & 0x80 != 0)
-        self.SetSignal('C', not self.Flag['N'])
+        self.SetSignal('C', val & 0x80 == 0)
         self.AddCycle[1] = 1 #JUST LETTING THE CLOCK KNOW ABOUT POTENTIAL ADDITIONAL CYCLES ON ABX, ABY AND IZY
     def CPX(self): #COMPARE X. SAME THING WITH REGISTER X. C, Z, N
         self.fetch()
@@ -492,14 +498,14 @@ class _6502:
        # self.SetSignal('C', val & 0x80 >= 0)
         self.SetSignal('Z', val == 0)
         self.SetSignal('N', val &0x80 != 0)
-        self.SetSignal('C', not self.Flag['N'])
+        self.SetSignal('C', val & 0x80 == 0)
     def CPY(self): #COMPARE Y. SAME THING WITH REGISTER Y. C, Z, N
         self.fetch()
         val = (self.IXY - self.addr) & 0xFF
         #self.SetSignal('C', val & 0x80 >= 0)
         self.SetSignal('Z', val == 0)
         self.SetSignal('N', val & 0x80 != 0)
-        self.SetSignal('C', not self.Flag['N'])
+        self.SetSignal('C', val & 0x80 == 0)
     def DEC(self):#DECREMENT MEMORY. SUBTRACT ONE FROM A MEMORY LOCATION. WRITES BACK TO MEMORY/ ACC.Z. N
 
         fetched = self.fetch()
@@ -519,6 +525,7 @@ class _6502:
         self.SetSignal('Z', self.IXY== 0)
         self.SetSignal('N', (self.IXY & 0x80 != 0))
     def EOR(self): #EXCLUSIVE OR. EORs BETWEEN ACC AND ADDR, SETTING REGISTERS APPROPRIATELY. Z,N.
+        print("eor")
         self.fetch()
         self.ACC = self.ACC ^ self.addr
         self.SetSignal('Z', self.ACC == 0)
@@ -548,7 +555,7 @@ class _6502:
         self.PC = self.JumpAddress
     def JSR(self): #JUMP TO SUBROUTINE. PUSHES CURRENT PC TO STACK THEN SETS IT TO SELF.ADDR. USED WHEN YOU WANT TO BE ABLE TO GO BACK FROM WHERE YOU JUMPED.
         self.fetch()
-        self.Push(((self.PC - 1)>> 8)& 0xFF) #THE WAY THE EMULATOR IS DESIGNED,THE PC ALREADY INCREMENTS PAST THE OPERAND, SO IT GOES UP ONE ABOVE THE VALUE WE WANT (PC + 2)
+        self.Push(((self.PC - 1)>> 8)& 0xFF) #THE WAY THE EMULATOR IS DESIGNED,THE PC ALREADY INCREMENTS PAST THE OPERAND, SO IT GOES UP ONE ABOVE THE VALUE WE WANT (INITIAL PC + 2)
         self.Push((self.PC -1) & 0xFF)
         self.PC = self.JumpAddress
     def LDA(self): #LOAD A. LOADS SELF.ADDR INTO ACC. Z, N.
@@ -570,6 +577,7 @@ class _6502:
         self.SetSignal('N', self.IXY &0x80 != 0)
         self.AddCycle[1] = 1 #JUST LETTING THE CLOCK KNOW ABOUT POTENTIAL ADDITIONAL CYCLES ON ABX
     def LSR(self): #LOGICAL SHIFT TO THE RIGHT. WRITES BACK TO MEMORY/ACC. C, Z, N. Carry becomes bit 0
+        print("lsr")
         fetched = self.fetch()
         self.SetSignal('C', self.addr & 0x01 != 0)
         self.SetSignal('N', False)
@@ -602,11 +610,12 @@ class _6502:
         #NOTE THAT THE VALUE OF I CHANGING WILL TAKE EFFECT IN THE NEXT CYCLE, NOT IMMEDIATELY. IMPLEMENT THIS!!!
         self.fetch()
         byte = self.Pop()
-        B = self.Flag['B'] #B NEEDS TO BE RESTORED AFTERWARDS BECAUSE B IS ACTUALLY IGNORED IN THE EMULATOR
+        B = self.Flag['B'] #B NEEDS TO BE RESTORED AFTERWARDS BECAUSE B IS ACTUALLY IGNORED WHEN PULLING
         self.BreakSF(byte) #BREAKSF TAKES A BYTE REPRESENTING THE STATUS FLAGS AND CONVERTS THEM INTO THE DICTIONARY FLAGS BEING USED IN THE EMULATION
         self.SetSignal('B', B)
     def ROL(self): #SHIFTS ACC/ADDR TO THE LEFT, BUT ACTS AS IF THE CARRY BIT IS BOTH BELOW BIT 0 AND ABOVE BIT 7. CARRY IS SHIFTED TO BIT 0, AND BIT 7 IS THEN...
         #SHIFTED TO CARRY. THIS INSTRUCTION WRITES BACK TO MEMORY/ACC. C, Z, N.
+        print("rol")
         fetched = self.fetch()
         temp = self.addr << 1
         temp = temp + self.Flag['C'] #CARRY SHIFTED INTO BIT 0
@@ -617,6 +626,7 @@ class _6502:
         self.SetSignal('Z', temp == 0)
         self.write(temp, fetched)
     def ROR(self): #SHIFTS ACC/ADDR TO THE RIGHT. SAME THING BUT THE OTHER WAY AROUND. C, Z, N.
+        print("ror")
         fetched = self.fetch()
         temp = self.addr >> 1
         temp = temp + (self.Flag['C'] << 7)  # CARRY SHIFTED INTO BIT 7
@@ -630,9 +640,12 @@ class _6502:
         #ONE IMPORTANT THING TO NOTE HERE IS THAT THE INTERRUPT RETURN WILL BE IMMEDIATE, NOT DELAYED ONE CYCLE
         self.fetch()
         byte = self.Pop()
+        B = self.Flag['B']
         self.BreakSF(byte)
+        self.SetSignal('B', B)
         low = self.Pop()
         high = self.Pop()
+
 
         self.PC = AssembleByte(low, high)#HIGH BYTE COMES IN SECOND, SO IT NEEDS TO BE ASSEMBLED CORRECTLY
     def RTS(self): #RETURN FROM SUBROUTINE. POPS ADDRESS FROM STACK INTO PC, THEN INCREMENTS
@@ -663,21 +676,32 @@ class _6502:
     def TAX(self): #TRANSFER A TO X. X == ACC
         self.fetch()
         self.IXX = self.ACC
+        self.SetSignal('Z', self.IXX == 0)
+        self.SetSignal('N', self.IXX & 0x80 != 0)
     def TAY(self): #TRANSFER A TO Y
         self.fetch()
         self.IXY = self.ACC
+        self.SetSignal('Z', self.IXY == 0)
+        self.SetSignal('N', self.IXY & 0x80 != 0)
     def TSX(self): #TRANSFER STACK POINTER TO X
         self.fetch()
         self.IXX = self.SP
+        self.SetSignal('Z', self.IXX == 0)
+        self.SetSignal('N', self.IXX & 0x80 != 0)
     def TXA(self): #TRANSFER X TO A
         self.fetch()
         self.ACC = self.IXX
+        self.SetSignal('Z', self.ACC == 0)
+        self.SetSignal('N', self.ACC & 0x80 != 0)
     def TXS(self): #TRANSFER X TO SP
         self.fetch()
         self.SP = self.IXX
+
     def TYA(self): #TRANSFER Y TO A
         self.fetch()
         self.ACC = self.IXY
+        self.SetSignal('Z', self.ACC == 0)
+        self.SetSignal('N', self.ACC & 0x80 != 0)
 cpu = _6502()
 cpu.PC = 0x0400
 while True:
@@ -688,9 +712,10 @@ while True:
     print(hex(cpu.ACC), hex(cpu.IXX), hex(cpu.IXY), hex(cpu.SP), hex(cpu.addr), hex(cpu.PC), hex(cpu.RAM[(cpu.PC) & 0xFFFF]), hex(cpu.RAM[(cpu.PC+1) & 0xFFFF]), hex(cpu.RAM[(cpu.PC+2) & 0xFFFF]))
     print(cpu.Flag)
     print([hex(cpu.RAM[0x01FA]), hex(cpu.RAM[0x01FB]), hex(cpu.RAM[0x01FC]), hex(cpu.RAM[0x01FD]), hex(cpu.RAM[0x01FE]), hex(cpu.RAM[0x01FF])] )#, hex(cpu.RAM[0x01F5]), hex(cpu.RAM[0x01F5]))
-    if cpu.PC == 0xBED:
-     #   print(hex(cpu.RAM[0x01FE]))
-        break
+    print(hex(cpu.RAM[0x0102]) + "butt")
+    #if cpu.PC == 0xBED:
+        #print(hex(cpu.RAM[0x01FE]))
+      #  break
 
     #time.sleep(0.00001)
     #time.sleep(0.00001)
