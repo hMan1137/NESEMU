@@ -171,13 +171,13 @@ class _6502:
 
     def ABX(self): #ABSOLUTE ADDRESSING WITH AN X REGISTER OFFSET
         val = AssembleByte(self.GetByte(), self.GetByte())
-        if (val + self.IXX) & 0xFF < val:
+        if (val + self.IXX) & 0xFF00 != (val & 0xFF00):
             self.AddCycle[0] = 1 #PAGE BOUNDARY HAS BEEN CROSSED
         return (val + self.IXX) & 0xFFFF
 
     def ABY(self): #ABSOLUTE ADDRESSING WITH A Y REGISTER OFFSET
         val = AssembleByte(self.GetByte(), self.GetByte())
-        if (val + self.IXY) & 0xFF < val:
+        if (val + self.IXY) & 0xFF00 != (val & 0xFF00):
             self.AddCycle[0] = 1 #PAGE BOUNDARY HAS BEEN CROSSED
         return (val + self.IXY) & 0xFFFF
 
@@ -186,7 +186,7 @@ class _6502:
 
     def IZY(self): #SAME THING WITH Y-OFFSET, EXCEPT ITS ACTUALLY THE FINAL ADDRESS THATS OFFSET FOR SOME REASON
         var = self.ZeroPage(self.GetByte())
-        if (var + self.IXY) & 0xFF < var:
+        if (var + self.IXY) & 0xFF00 != (var & 0xFF00):
             self.AddCycle[0] = 1  #PAGE BOUNDARY HAS BEEN CROSSED
         return var + self.IXY
 
@@ -224,7 +224,7 @@ class _6502:
         opcode = self.RAM[self.PC]
         self.PC += 1
         Mode = self.operations[opcode][1]
-
+      #  self.cycle = self.operations[opcode][3]
         return self.read(Mode) #NOW THAT WE HAVE THE MODE, WE RUN IT THROUGH READ TO SET SELF.ADDR TO THE OPERAND, THIS RETURNS THE RETURN INDEX OF INSTRUCTION
    # def start(self): #A METHOD TO CALL WHEN STARTING THE EXECUTION OF AN INSTRUCTION.
     #    opcode = self.RAM[self.PC]
@@ -235,25 +235,29 @@ class _6502:
         #    (self.operations[opcode][0]())
 
     def clock(self):
-
-        print("hi")
-        if self.cycle == 0:
+        if self.cycle > 0:
+            self.cycle -= 1
+        #print("hi")
+        elif self.cycle == 0:
             opcode = self.RAM[self.PC]  # A FUNCTION TELLING THE CPU THAT ONE CLOCK CYCLE HAS PASSED. THIS IS THE HEART OF PROGRAM EXECUTION
-
-            #self.cycle = self.operations[opcode][3]
-            self.cycle =1
+            self.SetSignal(1, True)
+          #  self.cycle = self.operations[opcode][3]
+            #self.cycle =1
             #HANDLE ADDITIONAL CLOCK CYCLES:
             start = self.operations[opcode][0]() #START PC EXECUTION, OPCODE ZERO STORES THE INSTRUCTION
-       #     if self.AddCycle[0] == 1:
-        #        if self.AddCycle[1] == 1:
-         #           self.cycle += 1
-          #      elif self.AddCycle[1] > 1:
-           #         self.cycle += 2
-            #self.AddCycle = [0, 0]
+            self.SetSignal(1, True)
+            self.cycle = self.operations[self.RAM[self.PC]][3]
+            self.cycle -= 1
+            print(hex(opcode))
+            if self.AddCycle[0] == 1:
+                if self.AddCycle[1] == 1:
+                    self.cycle += 1
+                elif self.AddCycle[1] > 1:
+                    self.cycle += 2
+            self.AddCycle = [0, 0]
             #LIMIT TO ONCE PER CYCLE FOR TESTING
 
-        elif self.cycle > 0:
-            self.cycle -= 1
+
     def reset(self): #THAT RESET VECTOR I WAS TALKING ABOUT EARLIER
         #JUST REINITIALISES EVERYTHING TO HOW IT WAS
         self.ACC = 0
@@ -404,7 +408,7 @@ class _6502:
         self.fetch()
         if not self.Flag['C']:  #BRANCH IF CARRY CLEAR. INCREMENTS THE PC BY 2, THEN ADDS THE RELATIVE OFFSET IF THE CARRY IS CLEAR
             self.AddCycle[1] = 1  # ADDS A CYCLE IF BRANCH IS FULL
-            if (self.PC + self.addr) & 0xFF < self.PC: #A PAGE BOUNDARY HAS BEEN CROSSED
+            if (self.PC + self.addr) & 0xFF00 != (self.PC & 0xFF00): #A PAGE BOUNDARY HAS BEEN CROSSED
                 self.AddCycle[1] = 2 #ADDS TWO CYCLES INSTEAD
             self.PC += self.addr #THIS ONLY USES RELATIVE MODE, SO THE ADDRESS IS CONVERTED TO SIGNED BEFOREHAND (SEE REL())
 
@@ -412,14 +416,14 @@ class _6502:
         self.fetch()
         if self.Flag['C']:
             self.AddCycle[1] = 1  # ADDS A CYCLE IF BRANCH IS FULL
-            if (self.PC + self.addr) & 0xFF < self.PC: #A PAGE BOUNDARY HAS BEEN CROSSED
+            if (self.PC + self.addr) & 0xFF00 != (self.PC & 0xFF00):  # A PAGE BOUNDARY HAS BEEN CROSSED
                 self.AddCycle[1] = 2 #ADDS TWO CYCLES INSTEAD
             self.PC += self.addr
     def BEQ(self):
         self.fetch() #BRANCH IF EQUAL. DOES THE SAME THING IF THE ZERO FLAG IS SET
         if self.Flag['Z']:
             self.AddCycle[1] = 1  # ADDS A CYCLE IF BRANCH IS FULL
-            if (self.PC + self.addr) & 0xFF < self.PC: #A PAGE BOUNDARY HAS BEEN CROSSED
+            if (self.PC + self.addr) & 0xFF00 != (self.PC & 0xFF00): #A PAGE BOUNDARY HAS BEEN CROSSED
                 self.AddCycle[1] = 2 #ADDS TWO CYCLES INSTEAD
             self.PC += self.addr
     def BIT(self): #BIT TEST. Z,V, N. THIS OPERATION ONLY CHANGES FLAGS. IT PERFORMS A BITMASK OF ACC & ADDR, SETTING ZERO IF THE RESULT IS ZERO. V AND N ARE SIMPLY...
@@ -433,7 +437,7 @@ class _6502:
         self.fetch()
         if self.Flag['N']:
             self.AddCycle[1] = 1  # ADDS A CYCLE IF BRANCH IS FULL
-            if (self.PC + self.addr) & 0xFF < self.PC: #A PAGE BOUNDARY HAS BEEN CROSSED
+            if (self.PC + self.addr) & 0xFF00 != (self.PC & 0xFF00): #A PAGE BOUNDARY HAS BEEN CROSSED
                 self.AddCycle[1] = 2 #ADDS TWO CYCLES INSTEAD
             self.PC += self.addr
     def BNE(self): #BRANCH IF NOT EQUAL. (THE ZERO FLAG IS CLEAR)
@@ -442,7 +446,7 @@ class _6502:
         if not self.Flag['Z']:
            # print("heyyyyy")
             self.AddCycle[1] = 1  # ADDS A CYCLE IF BRANCH IS FULL
-            if (self.PC + self.addr) & 0xFF < self.PC: #A PAGE BOUNDARY HAS BEEN CROSSED
+            if (self.PC + self.addr) & 0xFF00 != (self.PC & 0xFF00): #A PAGE BOUNDARY HAS BEEN CROSSED
                 self.AddCycle[1] = 2 #ADDS TWO CYCLES INSTEAD
             print(self.PC)
             self.PC += self.addr
@@ -452,7 +456,7 @@ class _6502:
         self.fetch()
         if not self.Flag['N']:
             self.AddCycle[1] = 1  # ADDS A CYCLE IF BRANCH IS FULL
-            if (self.PC + self.addr) & 0xFF < self.PC: #A PAGE BOUNDARY HAS BEEN CROSSED
+            if (self.PC + self.addr) & 0xFF00 != (self.PC & 0xFF00): #A PAGE BOUNDARY HAS BEEN CROSSED
                 self.AddCycle[1] = 2 #ADDS TWO CYCLES INSTEAD
             self.PC += self.addr
     def BRK(self): #BREAK (ALSO KNOWN AS A SOFTWARE IRQ). I, B.
@@ -473,14 +477,14 @@ class _6502:
         self.fetch()
         if not self.Flag['V']:
             self.AddCycle[1] = 1  # ADDS A CYCLE IF BRANCH IS FULL
-            if (self.PC + self.addr) & 0xFF < self.PC: #A PAGE BOUNDARY HAS BEEN CROSSED
+            if (self.PC + self.addr) & 0xFF00 != (self.PC & 0xFF00): #A PAGE BOUNDARY HAS BEEN CROSSED
                 self.AddCycle[1] = 2 #ADDS TWO CYCLES INSTEAD
             self.PC += self.addr
     def BVS(self): #BRANCH IF OVERFLOW SET
         self.fetch()
         if self.Flag['V']:
             self.AddCycle[1] = 1  # ADDS A CYCLE IF BRANCH IS FULL
-            if (self.PC + self.addr) & 0xFF < self.PC: #A PAGE BOUNDARY HAS BEEN CROSSED
+            if (self.PC + self.addr) & 0xFF00 != (self.PC & 0xFF00): #A PAGE BOUNDARY HAS BEEN CROSSED
                 self.AddCycle[1] = 2 #ADDS TWO CYCLES INSTEAD
             self.PC += self.addr
     def CLC(self): #CLEAR THE CARRY. SELF EXPLANATORY
@@ -723,7 +727,7 @@ while True:
 
     #print(hex(cpu.ACC), hex(cpu.IXX), hex(cpu.IXY), hex(cpu.SP), hex(cpu.addr), hex(cpu.PC), hex(cpu.RAM[cpu.PC+1]), hex(cpu.RAM[(cpu.PC)]), hex(cpu.RAM[cpu.PC+2]))
     cpu.clock()
-    print("ACC", hex(cpu.ACC), "IXX", hex(cpu.IXX), "IXY", hex(cpu.IXY), "SP", hex(cpu.SP), "addr", hex(cpu.addr), "PC", hex(cpu.PC), "OPCODE", hex(cpu.RAM[(cpu.PC) & 0xFFFF]),  hex(cpu.RAM[(cpu.PC+1) & 0xFFFF]), hex(cpu.RAM[(cpu.PC+2) & 0xFFFF]))
+    print("CYCLES", cpu.cycle, "ACC", hex(cpu.ACC), "IXX", hex(cpu.IXX), "IXY", hex(cpu.IXY), "SP", hex(cpu.SP), "addr", hex(cpu.addr), "PC", hex(cpu.PC), "OPCODE", hex(cpu.RAM[(cpu.PC) & 0xFFFF]),  hex(cpu.RAM[(cpu.PC+1) & 0xFFFF]), hex(cpu.RAM[(cpu.PC+2) & 0xFFFF]))
     print(cpu.Flag)
     print([hex(cpu.RAM[0x01FA]), hex(cpu.RAM[0x01FB]), hex(cpu.RAM[0x01FC]), hex(cpu.RAM[0x01FD]), hex(cpu.RAM[0x01FE]), hex(cpu.RAM[0x01FF])] )#, hex(cpu.RAM[0x01F5]), hex(cpu.RAM[0x01F5]))
     #print(hex(cpu.RAM[0x0102]) + "butt")
