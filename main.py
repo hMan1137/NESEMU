@@ -601,11 +601,18 @@ class _6502:
     def LSR(self): #LOGICAL SHIFT TO THE RIGHT. WRITES BACK TO MEMORY/ACC. C, Z, N. Carry becomes bit 0
         print("lsr")
         fetched =self.fetched
-        self.SetSignal('C', self.data & 0x01 != 0)
-        self.SetSignal('N', False)
-        self.data = self.data >> 1
-        self.SetSignal('Z', self.data == 0)
-        self.write(self.data, fetched)
+        if fetched != -1:
+            self.SetSignal('C', self.data & 0x01 != 0)
+            self.SetSignal('N', False)
+            self.data = self.data >> 1
+            self.SetSignal('Z', self.data == 0)
+            self.write(self.data, fetched)
+        else:
+            self.SetSignal('C', self.ACC & 0x01 != 0)
+            self.SetSignal('N', False)
+            self.ACC = self.ACC >> 1
+            self.SetSignal('Z', self.ACC == 0)
+
     def NOP(self): #NO OPERATION. JUST WASTES CPU CYCLES
 
         return
@@ -639,25 +646,61 @@ class _6502:
         #SHIFTED TO CARRY. THIS INSTRUCTION WRITES BACK TO MEMORY/ACC. C, Z, N.
         print("rol")
         fetched =self.fetched
-        temp = self.data << 1
-        temp = temp + self.Flag['C'] #CARRY SHIFTED INTO BIT 0
+        if fetched != -1:
+            temp = self.data << 1
+            if self.Flag['C']:
+                carrybit = 0xFF
+            else:
+                carrybit = 0xFE
+            temp = temp & carrybit #CARRY SHIFTED INTO BIT 0
 
-        self.SetSignal('C', self.data & 0x0080 != 0) #CARRY EQUAL TO BIT 7
+            self.SetSignal('C', self.data & 0x0080 != 0) #CARRY EQUAL TO BIT 7
 
-        self.SetSignal('N', temp & 0x80 !=0)
-        self.SetSignal('Z', temp == 0)
-        self.write(temp, fetched)
+            self.SetSignal('N', temp & 0x80 !=0)
+            self.SetSignal('Z', temp == 0)
+            self.write(temp, fetched)
+        else:
+            temp = self.ACC
+            self.ACC= self.ACC << 1
+            if self.Flag['C']:
+                carrybit = 0xFF
+            else:
+                carrybit = 0xFE
+            self.ACC = self.ACC & carrybit  # CARRY SHIFTED INTO BIT 0
+
+            self.SetSignal('C', temp & 0x0080 != 0)  # CARRY EQUAL TO BIT 7
+
+            self.SetSignal('N', self.ACC & 0x80 != 0)
+            self.SetSignal('Z', self.ACC == 0)
     def ROR(self): #SHIFTS ACC/ADDR TO THE RIGHT. SAME THING BUT THE OTHER WAY AROUND. C, Z, N.
         print("ror")
         fetched =self.fetched
-        temp = self.data >> 1
-        temp = temp + (self.Flag['C'] << 7)  # CARRY SHIFTED INTO BIT 7
+        if fetched != -1:
+            temp = self.data >> 1
+            if self.Flag['C']:
+                carrybit = 0xFF
+            else:
+                carrybit = 0x7F
+            temp = temp & carrybit  # CARRY SHIFTED INTO BIT 7
 
-        self.SetSignal('C', self.data & 0x01 != 0)  # CARRY EQUAL TO BIT 0
+            self.SetSignal('C', self.data & 0x01 != 0)  # CARRY EQUAL TO BIT 0
 
-        self.SetSignal('N', temp & 0x80 !=0)
-        self.SetSignal('Z', temp == 0)
-        self.write(temp, fetched)
+            self.SetSignal('N', temp & 0x80 !=0)
+            self.SetSignal('Z', temp == 0)
+            self.write(temp, fetched)
+        else:
+            temp = self.ACC
+            self.ACC = self.ACC >> 1
+            if self.Flag['C']:
+                carrybit = 0xFF
+            else:
+                carrybit = 0x7F
+            self.ACC = self.ACC & carrybit  # CARRY SHIFTED INTO BIT 7
+
+            self.SetSignal('C', temp & 0x01 != 0)  # CARRY EQUAL TO BIT 0
+
+            self.SetSignal('N', self.ACC & 0x80 != 0)
+            self.SetSignal('Z', self.ACC == 0)
     def RTI(self): #RETURN FROM INTERRUPT. POPS THE STATUS FLAGS FROM THE STACK, THEN POPS THE PC
         #ONE IMPORTANT THING TO NOTE HERE IS THAT THE INTERRUPT RETURN WILL BE IMMEDIATE, NOT DELAYED ONE CYCLE
 
@@ -726,6 +769,7 @@ class _6502:
         self.SetSignal('N', self.ACC & 0x80 != 0)
 cpu = _6502()
 cpu.PC = 0x0400
+sleep= False
 while True:
 
 
@@ -735,9 +779,11 @@ while True:
     print(cpu.Flag)
     print([hex(cpu.RAM[0x01FA]), hex(cpu.RAM[0x01FB]), hex(cpu.RAM[0x01FC]), hex(cpu.RAM[0x01FD]), hex(cpu.RAM[0x01FE]), hex(cpu.RAM[0x01FF])] )#, hex(cpu.RAM[0x01F5]), hex(cpu.RAM[0x01F5]))
     #print(hex(cpu.RAM[0x0102]) + "butt")
-    #if cpu.PC == 0xEEC:
+    if cpu.PC == 0x236C:
         #print(hex(cpu.RAM[0x01FE]))
-     #   break
-
+        break
+        sleep = True
+    if sleep:
+        time.sleep(0.01)
     #time.sleep(0.00001)
     #time.sleep(0.00001)
