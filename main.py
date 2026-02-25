@@ -90,11 +90,14 @@ class _6502:
 
     def read(self, mode):
         address = mode()
+        #print(hex(address))
+        #print(hex(self.RAM[address]))
         if mode == self.REL: # or mode == self.ABS or mode == self.ABX or mode == self.ABY or mode == self.ZP0 or mode == self.ZPX or mode == self.ZPY:
             print("heyup")
             self.addr = address
         else:
             self.addr = self.ACC if address == -1 else self.RAM[address]
+            #print(self.addr)
 
         #self.PC += 1
         self.JumpAddress = address
@@ -151,14 +154,16 @@ class _6502:
     def IND(self): #USED TO DEFERENCE FOR A JMP INSTRUCTION. IT JMPS TO THE ADDRESS FOUND ON THE ADDRESS THE PROGRAM TAKES IT
         lb = self.GetByte()
         hb = self.GetByte()
-        low = self.RAM[AssembleByte(lb, hb)] & 0xFF #DEREFENCES FOR THE LOW POINTER
+        byte = AssembleByte(lb, hb)
+        lowptr = self.RAM[byte] & 0xFF #DEREFENCES FOR THE LOW POINTER
         #high = self.RAM[(AssembleByte(lb, hb + 1))] &0xFF #DEFERENCES FOR THE HIGH POINTER
         #full = AssembleByte(low, high)
-        if low == 0x00FF: #MEANING HIGH WOULD OTHERWISE CROSS A PAGE BOUNDARY
-            high = self.RAM[(AssembleByte(lb, hb))] & 0x00FF #DEFERENCES FOR THE HIGH POINTER KEEPING THE BUG IN MIND
-        else:
-            high = self.RAM[(AssembleByte(lb, hb))+1] & 0x00FF  # DEFERENCES FOR THE HIGH POINTER NORMALLY
-        return AssembleByte(low, high)
+        highptr = self.RAM[(AssembleByte((lb + 1) & 0xFF, hb))] & 0xFF
+       # if lb == 0xFF: #MEANING HIGH WOULD OTHERWISE CROSS A PAGE BOUNDARY
+        #    highptr = self.RAM[(AssembleByte(0x00, hb))] & 0x00FF #DEFERENCES FOR THE HIGH POINTER KEEPING THE BUG IN MIND
+        #else:
+         #   highptr = self.RAM[(byte+1)] & 0x00FF  # DEFERENCES FOR THE HIGH POINTER NORMALLY
+        return AssembleByte(lowptr, highptr)
 
         #NEW: IMPLEMENTED THE BUG
     def ABS(self): #ABSOLUTE ADDRESSING
@@ -174,7 +179,7 @@ class _6502:
         val = AssembleByte(self.GetByte(), self.GetByte())
         if (val + self.IXY) & 0xFF < val:
             self.AddCycle[0] = 1 #PAGE BOUNDARY HAS BEEN CROSSED
-        return val + self.IXY
+        return (val + self.IXY) & 0xFFFF
 
     def IZX(self): #INDIRECT ZERO-PAGE ADDRESSING WITH X REGISTER OFFSET
         return self.ZeroPage(self.GetByte() + self.IXX)
@@ -234,15 +239,17 @@ class _6502:
         print("hi")
         if self.cycle == 0:
             opcode = self.RAM[self.PC]  # A FUNCTION TELLING THE CPU THAT ONE CLOCK CYCLE HAS PASSED. THIS IS THE HEART OF PROGRAM EXECUTION
-            self.cycle = self.operations[opcode][3]
+
+            #self.cycle = self.operations[opcode][3]
+            self.cycle =1
             #HANDLE ADDITIONAL CLOCK CYCLES:
             start = self.operations[opcode][0]() #START PC EXECUTION, OPCODE ZERO STORES THE INSTRUCTION
-            if self.AddCycle[0] == 1:
-                if self.AddCycle[1] == 1:
-                    self.cycle += 1
-                elif self.AddCycle[1] > 1:
-                    self.cycle += 2
-            self.AddCycle = [0, 0]
+       #     if self.AddCycle[0] == 1:
+        #        if self.AddCycle[1] == 1:
+         #           self.cycle += 1
+          #      elif self.AddCycle[1] > 1:
+           #         self.cycle += 2
+            #self.AddCycle = [0, 0]
             #LIMIT TO ONCE PER CYCLE FOR TESTING
 
         elif self.cycle > 0:
@@ -326,11 +333,11 @@ class _6502:
         self.SetSignal('N', byte & 0x80 > 0)
     def ADC(self): #ADD WITH CARRY. C, V, N, Z
         #THIS FUNCTION IS BY FAR THE BIGGEST HEADACHE TO FIGURE OUT
-        print("poopy")
+        print("adc")
         self.fetch()
         base = self.addr + self.ACC
         val = base + (self.Flag['C']) #NEEDS TO ADD THE VALUE OF THE CARRY
-        self.ACC = val & 0x00FF  # NEEDS TO WRAP TO 255/-128/127
+        val = val & 0xFF
         self.SetSignal('C', val > 0x00FF) #SETS THE CARRY BIT ON IF THE ADDITION WAS GREATER THAN 8 BITS
         #OKAy, EASY ENOUGH, RIGHT? WRONG!!!! BECAUSE YOU HAVE TO FIGURE OUT EVERYTHING THAT SETS THE OTHER FLAGS, TOO!
 
@@ -353,20 +360,22 @@ class _6502:
         #...((A AND B) XOR C). THE ONLY PROBLEM WITH THIS EXPRESSION IS THAT IT CAN TRIGGER TRUE WHEN A AND B ARE DIFFERENT FROM EACH OTHER, BUT IT SHOULD NEVER BE TRUE...
         #...SO THAT MEANS YOU WANT THE ENTIRE EXPRESSION TO BE FALSE IF A AND B ARE DIFFERENT, HENCE THE NOT(A XOR B) AT THE START.
         #PHEW! THAT ONE WAS PRETTY CEREBRAL, BUT APPARENTLY NOTHING IS AS COMPLICATED AFTER SBC.
+        self.ACC = val & 0xFF  # NEEDS TO WRAP TO 255/-128/127
         self.AddCycle[1] = 1 #JUST LETTING THE CLOCK KNOW ABOUT POTENTIAL ADDITIONAL CYCLES ON ABX, ABY AND IZY
     def SBC(self): #SUBTRACT WITH BORROW, C, V, N, Z
         #BORROW EFFECTIVELY MEANS NOT(CARRY)
-        print("poopy2")
+        print("sbc")
         self.fetch()
         base = self.ACC - self.addr
         val = base - (1-self.Flag['C'])
-        self.ACC = val & 0x00FF
+        val = val & 0xFF
         self.SetSignal('C', val > 0x0000) #IT COULD NEVER REACH THE UPPER LIMIT OF 255, SO HERE A CARRY OCCURS WHEN IT REACHES THE LOWER LIMIT OF 0
         self.SetSignal('Z', val & 0x00FF == 0)
         self.SetSignal('N', val & 0x80 != 0)
         self.SetSignal('V', 0x0080 & ((self.ACC ^ self.addr) & ((self.ACC & self.addr) ^ val))) #HERE, IT IS THE SAME EXCEPT THE NOT FROM THE XOR IS REMOVED BECAUSE...
         #...OVERFLOW IN SUBTRACTION CAN ONLY OCCUR WHEN BOTH NUMBERS HAVE *DIFFERENT* MSBs, WHICH IS BECAUSE SUBTRACTING A FROM B IS THE SAME THING AS ADDING THE...
         #...COMPLEMENT OF A FROM B. SO, SUBTRACTING DIFFERENT MSBs BECOMES THE SAME AS ADDING THE SAME MSBs
+        self.ACC = val
         self.AddCycle[1] = 1 #JUST LETTING THE CLOCK KNOW ABOUT POTENTIAL ADDITIONAL CYCLES ON ABX, ABY AND IZY
     def AND(self): #BITWISE AND. Z, N
         self.fetch()
@@ -383,11 +392,13 @@ class _6502:
             self.ACC = self.ACC << 1
             #THE NEGATIVE IS SET IF THE NEW BIT-SHIFTED VALUE HAS BIT 7 ON
             self.SetSignal('N', self.ACC & 0x80 != 0)
+            self.SetSignal('Z', self.ACC & 0x00FF == 0)
 
         else:
             self.SetSignal('C', self.addr & 0x80 != 0)
             self.addr = self.addr << 1
             self.SetSignal('N', self.addr & 0x80 != 0)
+            self.SetSignal('Z', self.addr & 0x00FF == 0)
             self.write(self.addr, mode)
     def BCC(self):
         self.fetch()
@@ -413,10 +424,11 @@ class _6502:
             self.PC += self.addr
     def BIT(self): #BIT TEST. Z,V, N. THIS OPERATION ONLY CHANGES FLAGS. IT PERFORMS A BITMASK OF ACC & ADDR, SETTING ZERO IF THE RESULT IS ZERO. V AND N ARE SIMPLY...
         #...THE VALUES OF BIT 6 AND 7 OF ADDR.
+        print("bit")
         self.fetch()
         self.SetSignal('Z', (self.ACC & self.addr) == 0)
-        self.SetSignal('N', (self.addr & 0x0080) == 1)
-        self.SetSignal('V', (self.addr & 0x0040) == 1)
+        self.SetSignal('N', (self.addr & 0x0080) != 0)
+        self.SetSignal('V', (self.addr & 0x0040) != 0)
     def BMI(self): #BRANCH IF MINUS. SAME AS THE PREVIOUS BRANCHES FOR THE NEGATIVE FLAG
         self.fetch()
         if self.Flag['N']:
@@ -486,11 +498,10 @@ class _6502:
     def CMP(self): #COMPARE A. COMPARES ACC WITH A VALUE IN MEMORY, SETTING FLAGS AS APPROPRIATE. C, Z, N
         self.fetch()
         val = (self.ACC - self.addr) & 0xFF
-        print(val)
-
+        print(self.ACC, self.addr, val)
         self.SetSignal('Z', val == 0)
         self.SetSignal('N', val & 0x80 != 0)
-        self.SetSignal('C', val & 0x80 == 0)
+        self.SetSignal('C', self.ACC >= self.addr)
         self.AddCycle[1] = 1 #JUST LETTING THE CLOCK KNOW ABOUT POTENTIAL ADDITIONAL CYCLES ON ABX, ABY AND IZY
     def CPX(self): #COMPARE X. SAME THING WITH REGISTER X. C, Z, N
         self.fetch()
@@ -498,27 +509,29 @@ class _6502:
        # self.SetSignal('C', val & 0x80 >= 0)
         self.SetSignal('Z', val == 0)
         self.SetSignal('N', val &0x80 != 0)
-        self.SetSignal('C', val & 0x80 == 0)
+        self.SetSignal('C', self.IXX >= self.addr)
     def CPY(self): #COMPARE Y. SAME THING WITH REGISTER Y. C, Z, N
         self.fetch()
         val = (self.IXY - self.addr) & 0xFF
         #self.SetSignal('C', val & 0x80 >= 0)
         self.SetSignal('Z', val == 0)
         self.SetSignal('N', val & 0x80 != 0)
-        self.SetSignal('C', val & 0x80 == 0)
+        self.SetSignal('C', self.IXY >= self.addr)
     def DEC(self):#DECREMENT MEMORY. SUBTRACT ONE FROM A MEMORY LOCATION. WRITES BACK TO MEMORY/ ACC.Z. N
-
+        print("dec")
         fetched = self.fetch()
         self.write((self.addr - 1), fetched)
         self.SetSignal('Z', (self.addr - 1) & 0xFF == 0)
         self.SetSignal('N', ((self.addr - 1) & 0xFF & 0x80 != 0))
     def DEX(self): #DECREMENT X. SAME THING BUT FOR THE X REGISTER. Z, N
+
         self.fetch()
         self.IXX -= 1
         self.IXX &= 0xFF
         self.SetSignal('Z', self.IXX== 0)
         self.SetSignal('N', (self.IXX & 0x80 != 0))
     def DEY(self): #DECREMENT Y. SAME THING BUT FOR THE Y REGISTER. Z, N
+
         self.fetch()
         self.IXY -= 1
         self.IXY &= 0xFF
@@ -532,6 +545,7 @@ class _6502:
         self.SetSignal('N', self.ACC &0x80 !=0)
         self.AddCycle[1] = 1 #JUST LETTING THE CLOCK KNOW ABOUT POTENTIAL ADDITIONAL CYCLES ON ABX, ABY AND IZY
     def INC(self): #INCREMENT MEMORY. ADD ONE TO A MEMORY LOCATION. WRITES BACK TO MEMORY/ ACC. Z, N.
+        print("inc")
         fetched = self.fetch()
         self.write((self.addr + 1), fetched)
         self.SetSignal('Z', self.addr +1 == 0)
@@ -709,13 +723,13 @@ while True:
 
     #print(hex(cpu.ACC), hex(cpu.IXX), hex(cpu.IXY), hex(cpu.SP), hex(cpu.addr), hex(cpu.PC), hex(cpu.RAM[cpu.PC+1]), hex(cpu.RAM[(cpu.PC)]), hex(cpu.RAM[cpu.PC+2]))
     cpu.clock()
-    print(hex(cpu.ACC), hex(cpu.IXX), hex(cpu.IXY), hex(cpu.SP), hex(cpu.addr), hex(cpu.PC), hex(cpu.RAM[(cpu.PC) & 0xFFFF]), hex(cpu.RAM[(cpu.PC+1) & 0xFFFF]), hex(cpu.RAM[(cpu.PC+2) & 0xFFFF]))
+    print("ACC", hex(cpu.ACC), "IXX", hex(cpu.IXX), "IXY", hex(cpu.IXY), "SP", hex(cpu.SP), "addr", hex(cpu.addr), "PC", hex(cpu.PC), "OPCODE", hex(cpu.RAM[(cpu.PC) & 0xFFFF]),  hex(cpu.RAM[(cpu.PC+1) & 0xFFFF]), hex(cpu.RAM[(cpu.PC+2) & 0xFFFF]))
     print(cpu.Flag)
     print([hex(cpu.RAM[0x01FA]), hex(cpu.RAM[0x01FB]), hex(cpu.RAM[0x01FC]), hex(cpu.RAM[0x01FD]), hex(cpu.RAM[0x01FE]), hex(cpu.RAM[0x01FF])] )#, hex(cpu.RAM[0x01F5]), hex(cpu.RAM[0x01F5]))
-    print(hex(cpu.RAM[0x0102]) + "butt")
-    #if cpu.PC == 0xBED:
+    #print(hex(cpu.RAM[0x0102]) + "butt")
+    if cpu.PC == 0xEEC:
         #print(hex(cpu.RAM[0x01FE]))
-      #  break
+        break
 
     #time.sleep(0.00001)
     #time.sleep(0.00001)
