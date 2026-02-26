@@ -248,15 +248,16 @@ class _6502:
 
             start = self.operations[opcode][0]() #START PC EXECUTION, OPCODE ZERO STORES THE INSTRUCTION
             self.SetSignal(1, True)
-            self.cycle = self.operations[self.RAM[self.PC]][3]
-            self.cycle -= 1
+          #  self.cycle = self.operations[self.RAM[self.PC]][3]
+
+            #self.cycle -= 1
             print(hex(opcode))
             # HANDLE ADDITIONAL CLOCK CYCLES:
-            if self.AddCycle[0] == 1:
-                if self.AddCycle[1] == 1:
-                    self.cycle += 1
-                elif self.AddCycle[1] > 1:
-                    self.cycle += 2
+           # if self.AddCycle[0] == 1:
+            #    if self.AddCycle[1] == 1:
+             #       self.cycle += 1
+              #  elif self.AddCycle[1] > 1:
+               #     self.cycle += 2
             self.AddCycle = [0, 0]
             #LIMIT TO ONCE PER CYCLE FOR TESTING
 
@@ -344,8 +345,8 @@ class _6502:
 
         base = self.data + self.ACC
         val = base + (self.Flag['C']) #NEEDS TO ADD THE VALUE OF THE CARRY
-        self.SetSignal('C', val > 0x00FF)
-        val = val & 0xFF
+        self.SetSignal('C', val > 0xFF)
+        #val = val & 0xFF
          #SETS THE CARRY BIT ON IF THE ADDITION WAS GREATER THAN 8 BITS
         #OKAy, EASY ENOUGH, RIGHT? WRONG!!!! BECAUSE YOU HAVE TO FIGURE OUT EVERYTHING THAT SETS THE OTHER FLAGS, TOO!
 
@@ -362,10 +363,10 @@ class _6502:
         #2. YOU ADDED TWO NEGATIVE NUMBERS, BUT ENDED UP GETTING A POSITIVE NUMBER
         # AFTER SOME THINKING I HAVE FIGURED OUT A LOGICAL EXPRESSION...
         # NOT(A XOR B) AND ((A&B) XOR C) WHERE A AND B ARE THE MSB OF THE ACC AND RAM, AND C IS THE MSB OF THE RESULT OF THE ADDITION
-        self.SetSignal('V', 0x0080 & (~(self.ACC ^ self.data ) & ((self.ACC & self.data) ^ val))) #AND WITH 0x0080 LIMITS IT TO THE MSB
+        self.SetSignal('V', (0x0080 & (~(self.ACC ^ self.data ) & ((self.ACC) ^ val))) != 0) #AND WITH 0x0080 LIMITS IT TO THE MSB
         #OKAY, WHY DID THAT WORK? BASICALLY: WHEN YOU HAVE TWO POSITIVE NUMBERS ADDED TOGETHER IN TWO'S COMPLEMENT, BOTH OF THEIR MSBs ARE 0. IF THE RESULTING NUMBER IS...
         #...NEGATIVE, ITS MSB IS 1, AND THE OPPOSITE IS ALSO TRUE. THAT MEANS OVERFLOW OCCURS WHEN THE MSB OF THE NUMBERS YOU ADD IS DIFFERENT FROM THE RESULT, HENCE...
-        #...((A AND B) XOR C). THE ONLY PROBLEM WITH THIS EXPRESSION IS THAT IT CAN TRIGGER TRUE WHEN A AND B ARE DIFFERENT FROM EACH OTHER, BUT IT SHOULD NEVER BE TRUE...
+        #...((A AND B) XOR C) (TURNS OUT THE B IN THAT EXPRESSION IS IRRELEVANT. THE ONLY PROBLEM WITH THIS EXPRESSION IS THAT IT CAN TRIGGER TRUE WHEN A AND B ARE DIFFERENT FROM EACH OTHER, BUT IT SHOULD NEVER BE TRUE...
         #...SO THAT MEANS YOU WANT THE ENTIRE EXPRESSION TO BE FALSE IF A AND B ARE DIFFERENT, HENCE THE NOT(A XOR B) AT THE START.
         #PHEW! THAT ONE WAS PRETTY CEREBRAL, BUT APPARENTLY NOTHING IS AS COMPLICATED AFTER SBC.
         self.ACC = val & 0xFF  # NEEDS TO WRAP TO 255/-128/127
@@ -373,17 +374,19 @@ class _6502:
     def SBC(self): #SUBTRACT WITH BORROW, C, V, N, Z
         #BORROW EFFECTIVELY MEANS NOT(CARRY)
         print("sbc")
-
-        base = self.ACC - self.data
-        val = base - (1-self.Flag['C'])
-        val = val & 0xFF
-        self.SetSignal('C', val > 0x0000) #IT COULD NEVER REACH THE UPPER LIMIT OF 255, SO HERE A CARRY OCCURS WHEN IT REACHES THE LOWER LIMIT OF 0
+        #INSTEAD OF DOING ACC - DATA, WE'RE GONNA DO ACC + (-DATA). THAT IS DONE VIA INVERSION + 1 AS IS ONE'S COMPLEMENT
+        temp = self.data ^0x00FF
+        base = self.ACC + temp
+        #BORROW IS ONE MINUS CARRY, BUT THE PLUS ONE IN THE INVERSION AND THE MINUS ONE HERE CANCEL, SO WE JUST ADD THE CARRY
+        val = base + self.Flag['C']
+       # val = val & 0xFF
+        self.SetSignal('C', val & 0xFF00 != 0) #IT COULD NEVER REACH THE UPPER LIMIT OF 255, SO HERE A CARRY OCCURS WHEN IT REACHES THE LOWER LIMIT OF 0
         self.SetSignal('Z', val & 0x00FF == 0)
         self.SetSignal('N', val & 0x80 != 0)
-        self.SetSignal('V', 0x0080 & ((self.ACC ^ self.data) & ((self.ACC & self.data) ^ val))) #HERE, IT IS THE SAME EXCEPT THE NOT FROM THE XOR IS REMOVED BECAUSE...
+        self.SetSignal('V', (0x0080 & ((self.ACC ^ val) & ((temp ^ val)))) !=0) #HERE, IT IS THE SAME EXCEPT THE NOT FROM THE XOR IS REMOVED BECAUSE...
         #...OVERFLOW IN SUBTRACTION CAN ONLY OCCUR WHEN BOTH NUMBERS HAVE *DIFFERENT* MSBs, WHICH IS BECAUSE SUBTRACTING A FROM B IS THE SAME THING AS ADDING THE...
-        #...COMPLEMENT OF A FROM B. SO, SUBTRACTING DIFFERENT MSBs BECOMES THE SAME AS ADDING THE SAME MSBs
-        self.ACC = val
+        #...COMPLEMENT OF A FROM B. SO, SUBTRACTING DIFFERENT MSBs BECOMES THE SAME AS ADDING THE SAME MSBs. ALSO WE WOULD BE LOOKING AT THE INVERTED DATA VALUE
+        self.ACC = val & 0xFF
         self.AddCycle[1] = 1 #JUST LETTING THE CLOCK KNOW ABOUT POTENTIAL ADDITIONAL CYCLES ON ABX, ABY AND IZY
     def AND(self): #BITWISE AND. Z, N
 
@@ -435,8 +438,8 @@ class _6502:
         print("bit")
 
         self.SetSignal('Z', (self.ACC & self.data) == 0)
-        self.SetSignal('N', (self.data & 0x0080) != 0)
-        self.SetSignal('V', (self.data & 0x0040) != 0)
+        self.SetSignal('N', (self.data >> 7) & 1)
+        self.SetSignal('V', (self.data >> 6) & 1)
     def BMI(self): #BRANCH IF MINUS. SAME AS THE PREVIOUS BRANCHES FOR THE NEGATIVE FLAG
 
         if self.Flag['N']:
@@ -525,7 +528,7 @@ class _6502:
         self.SetSignal('Z', val == 0)
         self.SetSignal('N', val & 0x80 != 0)
         self.SetSignal('C', self.IXY >= self.data)
-    def DEC(self):#DECREMENT MEMORY. SUBTRACT ONE FROM A MEMORY LOCATION. WRITES BACK TO MEMORY/ ACC.Z. N
+    def DEC(self):#DECREMENT MEMORY. SUBTRACT ONE FROM A MEMORY LOCATION. WRITES BACK TO MEMORY.Z. N
         print("dec")
         fetched =self.fetched
         self.write((self.data - 1), fetched)
@@ -647,26 +650,27 @@ class _6502:
         print("rol")
         fetched =self.fetched
         if fetched != -1:
-            temp = self.data << 1
+            temp = self.data
+            self.data = (self.data << 1) & 0xFF
             if self.Flag['C']:
-                carrybit = 0xFF
+                carrybit = 1
             else:
-                carrybit = 0xFE
-            temp = temp & carrybit #CARRY SHIFTED INTO BIT 0
+                carrybit = 0
+            self.data = self.data | carrybit #CARRY SHIFTED INTO BIT 0
 
-            self.SetSignal('C', self.data & 0x0080 != 0) #CARRY EQUAL TO BIT 7
+            self.SetSignal('C', temp & 0x0080 != 0) #CARRY EQUAL TO BIT 7
 
-            self.SetSignal('N', temp & 0x80 !=0)
-            self.SetSignal('Z', temp == 0)
-            self.write(temp, fetched)
+            self.SetSignal('N', self.data & 0x80 !=0)
+            self.SetSignal('Z', self.data == 0)
+            self.write(self.data, fetched)
         else:
             temp = self.ACC
-            self.ACC= self.ACC << 1
+            self.ACC= (self.ACC << 1) & 0xFF
             if self.Flag['C']:
-                carrybit = 0xFF
+                carrybit = 1
             else:
-                carrybit = 0xFE
-            self.ACC = self.ACC & carrybit  # CARRY SHIFTED INTO BIT 0
+                carrybit = 0
+            self.ACC = self.ACC | carrybit  # CARRY SHIFTED INTO BIT 0
 
             self.SetSignal('C', temp & 0x0080 != 0)  # CARRY EQUAL TO BIT 7
 
@@ -676,26 +680,27 @@ class _6502:
         print("ror")
         fetched =self.fetched
         if fetched != -1:
-            temp = self.data >> 1
+            temp = self.data
+            self.data = (self.data >> 1) & 0xFF
             if self.Flag['C']:
-                carrybit = 0xFF
+                carrybit = 0x80
             else:
-                carrybit = 0x7F
-            temp = temp & carrybit  # CARRY SHIFTED INTO BIT 7
+                carrybit = 0
+            self.data = self.data | carrybit  # CARRY SHIFTED INTO BIT 7
 
-            self.SetSignal('C', self.data & 0x01 != 0)  # CARRY EQUAL TO BIT 0
+            self.SetSignal('C', temp & 0x01 != 0)  # CARRY EQUAL TO BIT 0
 
-            self.SetSignal('N', temp & 0x80 !=0)
-            self.SetSignal('Z', temp == 0)
-            self.write(temp, fetched)
+            self.SetSignal('N', self.data & 0x80 !=0)
+            self.SetSignal('Z', self.data == 0)
+            self.write(self.data, fetched)
         else:
             temp = self.ACC
-            self.ACC = self.ACC >> 1
+            self.ACC = (self.ACC >> 1) & 0xFF
             if self.Flag['C']:
-                carrybit = 0xFF
+                carrybit = 0x80
             else:
-                carrybit = 0x7F
-            self.ACC = self.ACC & carrybit  # CARRY SHIFTED INTO BIT 7
+                carrybit = 0x0
+            self.ACC = self.ACC | carrybit  # CARRY SHIFTED INTO BIT 7
 
             self.SetSignal('C', temp & 0x01 != 0)  # CARRY EQUAL TO BIT 0
 
@@ -770,20 +775,25 @@ class _6502:
 cpu = _6502()
 cpu.PC = 0x0400
 sleep= False
-while True:
+with open('log.txt', 'r') as f:
+    while True:
 
 
-    #print(hex(cpu.ACC), hex(cpu.IXX), hex(cpu.IXY), hex(cpu.SP), hex(cpu.addr), hex(cpu.PC), hex(cpu.RAM[cpu.PC+1]), hex(cpu.RAM[(cpu.PC)]), hex(cpu.RAM[cpu.PC+2]))
-    cpu.clock()
-    print("CYCLES", cpu.cycle, "ACC", hex(cpu.ACC), "IXX", hex(cpu.IXX), "IXY", hex(cpu.IXY), "SP", hex(cpu.SP), "data", hex(cpu.data), "PC", hex(cpu.PC), "OPCODE", hex(cpu.RAM[(cpu.PC) & 0xFFFF]),  hex(cpu.RAM[(cpu.PC+1) & 0xFFFF]), hex(cpu.RAM[(cpu.PC+2) & 0xFFFF]))
-    print(cpu.Flag)
-    print([hex(cpu.RAM[0x01FA]), hex(cpu.RAM[0x01FB]), hex(cpu.RAM[0x01FC]), hex(cpu.RAM[0x01FD]), hex(cpu.RAM[0x01FE]), hex(cpu.RAM[0x01FF])] )#, hex(cpu.RAM[0x01F5]), hex(cpu.RAM[0x01F5]))
-    #print(hex(cpu.RAM[0x0102]) + "butt")
-    if cpu.PC == 0x236C:
-        #print(hex(cpu.RAM[0x01FE]))
-        break
-        sleep = True
-    if sleep:
-        time.sleep(0.01)
+        #print(hex(cpu.ACC), hex(cpu.IXX), hex(cpu.IXY), hex(cpu.SP), hex(cpu.addr), hex(cpu.PC), hex(cpu.RAM[cpu.PC+1]), hex(cpu.RAM[(cpu.PC)]), hex(cpu.RAM[cpu.PC+2]))
+            cpu.clock()
+
+            print("CYCLES", cpu.cycle, "ACC", hex(cpu.ACC), "IXX", hex(cpu.IXX), "IXY", hex(cpu.IXY), "SP", hex(cpu.SP),
+                  "data", hex(cpu.data), "PC", hex(cpu.PC), "OPCODE", hex(cpu.RAM[(cpu.PC) & 0xFFFF]),
+                  hex(cpu.RAM[(cpu.PC + 1) & 0xFFFF]), hex(cpu.RAM[(cpu.PC + 2) & 0xFFFF]))
+        #print("CYCLES", cpu.cycle, "ACC", hex(cpu.ACC), "IXX", hex(cpu.IXX), "IXY", hex(cpu.IXY), "SP", hex(cpu.SP), "data", hex(cpu.data), "PC", hex(cpu.PC), "OPCODE", hex(cpu.RAM[(cpu.PC) & 0xFFFF]),  hex(cpu.RAM[(cpu.PC+1) & 0xFFFF]), hex(cpu.RAM[(cpu.PC+2) & 0xFFFF]))
+            print(cpu.Flag)
+            print([hex(cpu.RAM[0x01FA]), hex(cpu.RAM[0x01FB]), hex(cpu.RAM[0x01FC]), hex(cpu.RAM[0x01FD]), hex(cpu.RAM[0x01FE]), hex(cpu.RAM[0x01FF])] )#, hex(cpu.RAM[0x01F5]), hex(cpu.RAM[0x01F5]))
+        #print(hex(cpu.RAM[0x0102]) + "butt")
+            if cpu.PC == 0x2A69 and cpu.Flag['Z'] == False:
+            #print(hex(cpu.RAM[0x01FE]))
+                break
+                sleep = True
+            if sleep:
+                time.sleep(0.01)
     #time.sleep(0.00001)
     #time.sleep(0.00001)
