@@ -11,7 +11,7 @@ class _6502:
 
 
 
-    def __init__(self):
+    def __init__(self, bus):
         #THE NES USES A RESET VECTOR, SO WE'RE INITIALISING AS IF HAVING JUST DONE A RESET
         self.operations = {
             0x69: [self.ADC, self.IMM, 2, 2], 0x65: [self.ADC, self.ZP0, 2, 3], 0x75: [self.ADC, self.ZPX, 2, 4], 0x6D: [self.ADC, self.ABS, 3, 4],
@@ -76,15 +76,7 @@ class _6502:
         self.fetched = 0 #stores fetched address. needed for some instructions
         #self.Instructions = {'ADC': self.ADC, 'SBC': self.SBC, 'AND': self.AND, 'ASL': self.ASL, 'BCC':self.BCC, 'BCS':self.BCS, 'BEQ': self.BEQ, 'BIT': self.BIT,
          #                    'BMI': self.BMI, 'BNE':self.BNE, 'BPL': self.BPL, 'BRK': self.BRK, 'BVC': self.BVC, 'BVS': self.BVS, 'CRC': self.CLC, 'CLD': self.CLD
-    #A DETERMINER FUNCTION FOR KNOWING WHAT ADDRESS MODE WE'RE WORKING WITH AND THUS PERFORMING THE APPROPRIATE ADDRESSING MODE FUNCTION. THE ADDRESSING MODES ARE DEALT WITH...
-    #...A LITTLE LATER
-    #def UseMode(self, mode):
-     #   if mode == 'ACC': #some commands address the accumulator directly, so we're gonna deal with that separately here
-      #      return -1
-      #  elif mode != 'ACC' & mode not in list(self.dataModes.keys()): #CATCH ALL FOR ILLEGAL ADDRESSING MODES
-      #      return -2
-      #  else:
-      #      return self.dataModes[mode]()
+
     #FUNCTIONS THAT READ FROM AND WRITE TO THE ADDRESS
 
     def read(self, mode):
@@ -121,12 +113,15 @@ class _6502:
     #WRITES AT THE CURRENT INDEX BEFORE THE PC INCREMENTS
 
     #OKAY, THIS IS IMPORTANT. WE NEED TO WORK ON ALL THE ADDRESSING MODES. THE NES HAS APPROXIMATELY ONE BAJILLION OF THEM
-    #FOR THIS, WE NEED TO UNDERSTAND OPCODE STRUCTURE. IT'S BASICALLY AAABBBCC, WHERE BBB TELLS YOU THE ADDRESSING MODE.
+    #IN THIS IMPLEMENTATION, WE ARE USING A LOOKUP TABLE FOR EACH INDIVIDUAL OPCODE. HOWEVER, THE ACTUAL CPU FOLLOWS VERY PARTICULAR PATTERNS WITH THE OPCODE....
+    #...IT USES THE GENERAL STRUCTURE AAABBBCC, WHERE AAA TELLS YOU THE INSTRUCTION, BBB TELLS YOU THE ADDRESSING MODE AND CC TELLS YOU REGISTER WE ARE DEALING WITH...
+    #...IF ANY. A MORE HARDWARE ACCURATE IMPLEMENTATION WOULD USE THIS TO FORM THE INSTRUCTION AND ADDRESSING FUNCTIONS, WHICH WOULD AUTOMATICALLY ALLOW FOR THE EXECUTION...
+    #...OF UNOFFICIAL OPCODES.
 
     #THE 6502 USES SOMETHING CALLED 'ZERO-PAGE' ADDRESSING, WHICH CAN LIMIT THE ADDRESSABLE MEMORY RANGE TO THE FIRST 256 BYTES OF MEMORY ASSIGNED TO BE ZERO-
     #PAGE MEMORY.
 
-    #WE ALREADY HAVE A DETERMINER FUNCTION FOR ALL THE ADDRESSING MODES, SO NOW WE JUST NEED TO DEFINE THEM
+
 
     #IT IS FUNDAMENTALLY IMPORTANT TO REMEMBER THAT SINCE THIS IS A VON NEUMANN ARCHITECTURE, THE INSTRUCTIONS LIVE IN THE SAME MEMORY SPACE AS THE OPERANDS. THE PC POINTS TO...
     #...THE CURRENT INSTRUCTION OPCODE BEING PERFORMED, BUT PC+1 WOULD POINT TO THE OPERAND, OR AT LEAST PART OF IT, SINCE THAT ALWAYS COMES RIGHT AFTER
@@ -152,21 +147,16 @@ class _6502:
         self.PC += 1
         #IMMEDIATE ADDRESSING, THE OPERAND IS THE NEXT BYTE
         return val
-    def IND(self): #USED TO DEFERENCE FOR A JMP INSTRUCTION. IT JMPS TO THE ADDRESS FOUND ON THE ADDRESS THE PROGRAM TAKES IT
+    def IND(self): #USED TO DEFERENCE FOR A JMP INSTRUCTION. IT JMPS TO THE ADDRESS FOUND ON THE ADDRESS FORMED BY THE NEXT TWO BYTES AND THE NEXT TWO BYTES PLUS 1
         lb = self.GetByte()
         hb = self.GetByte()
         byte = AssembleByte(lb, hb)
-        lowptr = self.RAM[byte] & 0xFF #DEREFENCES FOR THE LOW POINTER
-        #high = self.RAM[(AssembleByte(lb, hb + 1))] &0xFF #DEFERENCES FOR THE HIGH POINTER
-        #full = AssembleByte(low, high)
-        highptr = self.RAM[(AssembleByte((lb + 1) & 0xFF, hb))] & 0xFF
-       # if lb == 0xFF: #MEANING HIGH WOULD OTHERWISE CROSS A PAGE BOUNDARY
-        #    highptr = self.RAM[(AssembleByte(0x00, hb))] & 0x00FF #DEFERENCES FOR THE HIGH POINTER KEEPING THE BUG IN MIND
-        #else:
-         #   highptr = self.RAM[(byte+1)] & 0x00FF  # DEFERENCES FOR THE HIGH POINTER NORMALLY
+        lowptr = self.RAM[byte] & 0xFF #DEREFERENCES FOR THE LOW POINTER
+        highptr = self.RAM[(AssembleByte((lb + 1) & 0xFF, hb))] & 0xFF #DEREFERENCES FOR THE HIGH POINTER KEEPING THE BUG IN MIND. THE WRAP TO 0xFF MAKES IT READ FROM 0x00...
+        #...FROM THE LOW BYTE DURING A PAGE CROSS
+
         return AssembleByte(lowptr, highptr)
 
-        #NEW: IMPLEMENTED THE BUG
     def ABS(self): #ABSOLUTE ADDRESSING
         return AssembleByte(self.GetByte(), self.GetByte())
 
@@ -216,7 +206,7 @@ class _6502:
 
     #AND NOW, WE SHALL DO ALL THE OPCODES. THERE'S 200-SOMETHING POSSIBLE OPCODE ENTRIES ON THE 6502, BUT THERE ARE ONLY ABOUT 151 LEGAL ONES ON THE NES (56 ARE ACTUALLY...
     #...DIFFERENT. THE INFLATED NUMBER IS BECAUSE MANY OF THE SAME INSTRUCTIONS USE MULTIPLE ADDRESSING MODES)
-    #THE ILLEGAL OPCODES ARE USED BY A SMALL PERCENTAGE OF GAMES SO I WILL IMPLEMENT THEM EVENTUALLY, BUT THE VAST MAJORITY DO NOT NEED THEM, SO I'M SKIPPING THEM FOR NOW
+    #THE ILLEGAL OPCODES ARE USED BY A PERCENTAGE OF GAMES SO I WILL IMPLEMENT THEM EVENTUALLY, BUT THE MAJORITY DO NOT NEED THEM, SO I'M SKIPPING THEM FOR NOW
 
     #BEFORE WE DO ANYTHING HERE THOUGH, THE 6502 NEEDS A FEW THINGS TO BE ABLE TO PERFORM THESE AT ALL
     #THIS GETS THE DATA WE'RE WORKING WITH FOR AN OPCODE
@@ -323,8 +313,8 @@ class _6502:
         # B: B flag, doesnt actually do anything in the CPU but is useful to some software, 0x10
         # 1: 1 flag, no use at all, pushes to one by default, 0x20
         # O: Overflow flag, turns on if two negative numbers add to a positive or vice versa, 0x40
-        # N: Negative flag, turns on if the result of a mathematical addition or subtraction could be negative when using two's complement, 0x80
-        self.Flag[F] = (on == 1)
+        # N: Negative flag, turns on if the result of an operation could be negative when using two's complement, 0x80
+        self.Flag[F] = (on >= 1)
 
     #EACH INSTRUCTION HAS A SPECIFIC NUMBER OF FLAGS THAT ITS CAPABLE OF TURNING ON OR OFF DEPENDING ON THE RESULT. I HAVE MENTIONED ALL THE FLAGS NEXT TO EACH INSTRUCTION
     #HERE ARE THE ACTUAL INSTRUCTIONS
@@ -400,14 +390,14 @@ class _6502:
         if mode == -1: #IF ITS IN ACC MODE
             #THE CARRY IS SET IF THE INITIAL VALUE HAD BIT 7 ON
             self.SetSignal('C', self.ACC & 0x80 != 0)
-            self.ACC = self.ACC << 1
+            self.ACC = (self.ACC << 1) &0xFF
             #THE NEGATIVE IS SET IF THE NEW BIT-SHIFTED VALUE HAS BIT 7 ON
             self.SetSignal('N', self.ACC & 0x80 != 0)
             self.SetSignal('Z', self.ACC & 0x00FF == 0)
 
         else:
             self.SetSignal('C', self.data & 0x80 != 0)
-            self.data = self.data << 1
+            self.data = (self.data << 1) & 0xFF
             self.SetSignal('N', self.data & 0x80 != 0)
             self.SetSignal('Z', self.data & 0x00FF == 0)
             self.write(self.data, mode)
@@ -531,9 +521,10 @@ class _6502:
     def DEC(self):#DECREMENT MEMORY. SUBTRACT ONE FROM A MEMORY LOCATION. WRITES BACK TO MEMORY.Z. N
         print("dec")
         fetched =self.fetched
-        self.write((self.data - 1), fetched)
-        self.SetSignal('Z', (self.data - 1) & 0xFF == 0)
-        self.SetSignal('N', ((self.data - 1) & 0xFF & 0x80 != 0))
+        val = (self.data - 1) & 0xFF
+        self.write(val, fetched)
+        self.SetSignal('Z', val== 0)
+        self.SetSignal('N', (val & 0x80 != 0))
     def DEX(self): #DECREMENT X. SAME THING BUT FOR THE X REGISTER. Z, N
 
 
@@ -558,9 +549,10 @@ class _6502:
     def INC(self): #INCREMENT MEMORY. ADD ONE TO A MEMORY LOCATION. WRITES BACK TO MEMORY/ ACC. Z, N.
         print("inc")
         fetched = self.fetched
-        self.write((self.data + 1), fetched)
-        self.SetSignal('Z', self.data +1 == 0)
-        self.SetSignal('N', ((self.data+ 1) & 0xFF & 0x80!= 0))
+        val = (self.data + 1) & 0xFF
+        self.write(val, fetched)
+        self.SetSignal('Z', val== 0)
+        self.SetSignal('N', (val & 0x80!= 0))
     def INX(self): #INCREMENT X. SAME THING BUT FOR THE X REGISTER. Z, N.
 
         self.IXX += 1
@@ -585,7 +577,7 @@ class _6502:
         self.PC = self.JumpAddress
     def LDA(self): #LOAD A. LOADS self.data INTO ACC. Z, N.
 
-        self.ACC = self.data
+        self.ACC = self.data & 0xFF
         self.SetSignal('Z', self.ACC == 0)
         self.SetSignal('N', self.ACC & 0x80 !=0)
         self.AddCycle[1] = 1 #JUST LETTING THE CLOCK KNOW ABOUT POTENTIAL ADDITIONAL CYCLES ON ABX, ABY AND IZY
@@ -607,13 +599,13 @@ class _6502:
         if fetched != -1:
             self.SetSignal('C', self.data & 0x01 != 0)
             self.SetSignal('N', False)
-            self.data = self.data >> 1
+            self.data = (self.data >> 1) & 0xFF
             self.SetSignal('Z', self.data == 0)
             self.write(self.data, fetched)
         else:
             self.SetSignal('C', self.ACC & 0x01 != 0)
             self.SetSignal('N', False)
-            self.ACC = self.ACC >> 1
+            self.ACC = (self.ACC >> 1) & 0xFF
             self.SetSignal('Z', self.ACC == 0)
 
     def NOP(self): #NO OPERATION. JUST WASTES CPU CYCLES
@@ -789,11 +781,38 @@ with open('log.txt', 'r') as f:
             print(cpu.Flag)
             print([hex(cpu.RAM[0x01FA]), hex(cpu.RAM[0x01FB]), hex(cpu.RAM[0x01FC]), hex(cpu.RAM[0x01FD]), hex(cpu.RAM[0x01FE]), hex(cpu.RAM[0x01FF])] )#, hex(cpu.RAM[0x01F5]), hex(cpu.RAM[0x01F5]))
         #print(hex(cpu.RAM[0x0102]) + "butt")
-            if cpu.PC == 0x2A69 and cpu.Flag['Z'] == False:
+            if cpu.PC == 0x2CA2 and cpu.Flag['Z'] == False:
             #print(hex(cpu.RAM[0x01FE]))
                 break
-                sleep = True
+                #sleep = True
             if sleep:
                 time.sleep(0.01)
     #time.sleep(0.00001)
     #time.sleep(0.00001)
+    #AS I WRAP UP THE CPU, I NEED TO CREATE THE SORT OF 'GLUE' THAT COMES BETWEEN THE CPU, THE PPU, AND THE CARTRIDGE. THAT GLUE IS THE BUS THROUGH WHICH EVERYTHING CONNECTS...
+    #..., AND THE MAPPERS ON THE CARTRIDGES WHICH, WELL, MAP THE CARTRIDGE PROGRAM TO APPROPRIATE ADDRESSES ON THE ADDRESSABLE RANGE FOR BOTH THE CPU AND THE PPU.
+
+    #LET ME START WITH THE BUS. SO FAR, I'VE BEEN CONSIDERING THE ENTIRE 64KB BUS TO BE THE ADDRESSABLE CPU RAM, BUT THAT'S NOT NEARLY THE CASE FOR THE NES. THE 6502 ITSELF...
+    #...GETS 2KB OF RAM MIRRORED 4 TIMES OVER TO TAKE UP 8KB OF RANGE. THEN, THE PPU GETS THE NEXT 8KB, BUT THE CPU ONLY ADDRESSES THE FIRST 8 BITS, MIRRORED A BAJILLION TIMES.
+    #...AFTER THAT, THERES A SMALL ALLOCATION FOR THE APU AND I/O, AND THE REMAINING ALMOST 50% OF THE ADDRESSABLE RANGE GOES TO THE CARTRIDGE ITSELF. IT IS UP TO THE...
+    #...CARTRIDGE EXACTLY HOW IT USES ALL OF THIS SPACE, BUT IF THERE ARE MAPPER REGISTERS IT IS USUALLY IN THE 0x8000-0xFFFF RANGE
+
+    #THE IMPORTANT THING, OF COURSE, IS THAT NOW THE CPU DOES NOT TALK DIRECTLY TO RAM. ALL OF THESE DEVICES CONNECT TO THE BUS AND THE BUS LETS THEM TALK TO EACH OTHER...
+    #...THROUGH IT. THIS MEANS WE NEED A SEPARATE BUS CLASS THAT PERFORMS READS AND WRITES FOR OUR CARTRIDGE AND PPU
+
+class Bus:
+    def __init__(self):
+            #EVERYTHING TALKS TO THE BUS, SO EVERYTHING NEEDS A REFERENCE TO THE BUS
+        self._6502 = _6502(self) #CREATES A CPU OBJECT, PASSING THE BUS INTO IT
+        self.RAM = bytearray(2048) #THE ACTUAL 2KB OF CPU RAM THAT EXISTS, WHICH OF COURSE ALSO CONNECTS TO THE BUS
+    def read(self, address):
+        #THIS READ FUNCTION NEEDS TO RETURN AN ADDRESS WITHIN WORKABLE RANGE TO THE DIFFERENT OBJECTS.
+        if 0x1FFF>= address >= 0x0000: #WITHIN FIRST 8KB
+            return self.RAM[address & 0x7FF] #MASK THE 8KB RANGE TO 2KB
+        elif 0x3FFF <= address <= 0x2000: #GONNA STUB THE PPU FOR NOW
+
+            return 0 #
+        elif 0x4000 >= address >= 0x4017: #APU AND I/O, STUB THIS FOR NOW TOO
+            return 0
+        elif address >= 0x4020: #CARTRIDGE SPACE. ALSO STUBBING THIS
+            return 0
