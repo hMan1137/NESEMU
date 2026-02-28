@@ -66,8 +66,8 @@ class _6502:
         self.data = 0x0000 #THE DATA AT THE ADDRESS BEING CHECKED, EXCEPT IT CERTAIN CASES WHERE ITS THE ACTUAL ADDRESS
         self.addr = 0x0000 #THE ADDRESS AT WHICH THE DATA BE STORED
         self.reladdr = 0x0000 #RELATIVE ADDRESSES ARE STORED SEPARATELY SINCE THEYRE MORE LIKE SIGNED OFFSETS AND THUS NEED TO BE TREATED ESPECIALLY
-        with open("6502_functional_test.bin", "rb") as f:
-            self.RAM[:] = f.read() #setting RAM to a specific test ROM for testing purposes
+        #with open("6502_functional_test.bin", "rb") as f:
+         #   self.RAM[:] = f.read() #setting RAM to a specific test ROM for testing purposes
         self.PC = AssembleByte(self.RAM[0xFFFC], self.RAM[0xFFFD]) #THIS IS WHERE THE RESET POSITION FOR THE PC IS LOCATED. USUALLY IT'S EQUAL TO 0x8000 BUT ITS MORE...
         #...INTELLIGENT TO MATHEMATICALLY CALCULATE IT LIKE THE 6502 DID SINCE ITS NOT ACTUALLY A HARD-CODED THING, SO THERE COULD BE A WEIRD CASE WHERE IT DOES NOT...
         #...RESET TO 0x8000
@@ -101,9 +101,11 @@ class _6502:
             #print(self.data)
 
         #self.PC += 1
-        self.JumpAddress = address
-        self.data = self.bus.read(address)
-        return self.bus.read(address)
+        if address != -1:
+            self.JumpAddress = address
+            return  self.bus.read(address)
+        else:
+            return -1
         #return address #RETURNING THE INDEX OF RAM WE CHECK AT FOR THE SAKE OF WRITING CHANGES DIRECTLY TO MEMORY
     def write(self, data, address, x = False, y = False):
        # Mode = self.UseMode(mode)
@@ -155,7 +157,7 @@ class _6502:
 
         return 0 #HEY THAT ONE WAS PRETTY EASY!
     def AC1(self):
-        return -1
+        self.addr = -1
     def IMM(self):
         val = self.PC
         self.PC += 1
@@ -227,11 +229,12 @@ class _6502:
     def fetch(self):
 
         opcode = self.read(self.PC)
+        print(opcode)
         self.PC += 1
         Mode = self.operations[opcode][1]()
       #  self.cycle = self.operations[opcode][3]
-        if Mode == -1: #AS IN WE'RE IN ACCUMULATOR MODE
-            return self.read(self.ACC)
+        if self.addr == -1: #AS IN WE'RE IN ACCUMULATOR MODE
+            self.data = self.ACC
         else:
             return self.read(self.addr) #NOW THAT WE HAVE THE MODE, WE RUN IT THROUGH READ TO SET self.data TO THE OPERAND, THIS RETURNS THE RETURN INDEX OF INSTRUCTION
    # def start(self): #A METHOD TO CALL WHEN STARTING THE EXECUTION OF AN INSTRUCTION.
@@ -252,7 +255,7 @@ class _6502:
             self.SetSignal(1, True)
           #  self.cycle = self.operations[opcode][3]
             #self.cycle =1
-            self.fetched = self.fetch()
+            self.data = self.fetch()
 
             start = self.operations[opcode][0]() #START PC EXECUTION, OPCODE ZERO STORES THE INSTRUCTION
             self.SetSignal(1, True)
@@ -309,7 +312,8 @@ class _6502:
 
     # JUST SIMPLE MODULES TO PUSH AND POP FROM THE STACK
     def Push(self, data):
-        self.RAM[self.SP | 0x100] = data
+        self.bus.write(self.SP | 0x100, data)
+        #self.RAM[self.SP | 0x100] = data
         # SP COUNTS BACKWARDS SO IT DECREMENTS
         self.SP -= 1
         self.SP &= 0xFF
@@ -317,7 +321,7 @@ class _6502:
     def Pop(self):
         self.SP += 1
         self.SP &= 0xFF
-        val =self.RAM[self.SP | 0x100]
+        val =self.bus.read[self.SP | 0x100]
         #self.SP += 1
         return val
 
@@ -404,8 +408,8 @@ class _6502:
         self.AddCycle[1] = 1 #JUST LETTING THE CLOCK KNOW ABOUT POTENTIAL ADDITIONAL CYCLES ON ABX, ABY AND IZY
     def ASL(self): #ARITHMETIC LEFT SHIFT TO EITHER ACC OR VALUE. C, Z, N
         print("asl")
-        mode = self.fetched
-        if mode == -1: #IF ITS IN ACC MODE
+       # mode = self.fetched
+        if self.addr == -1: #IF ITS IN ACC MODE
             #THE CARRY IS SET IF THE INITIAL VALUE HAD BIT 7 ON
             self.SetSignal('C', self.ACC & 0x80 != 0)
             self.ACC = (self.ACC << 1) &0xFF
@@ -418,7 +422,7 @@ class _6502:
             self.data = (self.data << 1) & 0xFF
             self.SetSignal('N', self.data & 0x80 != 0)
             self.SetSignal('Z', self.data & 0x00FF == 0)
-            self.write(self.data, mode)
+            self.write(self.data, self.addr)
     def BCC(self):
 
         if not self.Flag['C']:  #BRANCH IF CARRY CLEAR. INCREMENTS THE PC BY 2, THEN ADDS THE RELATIVE OFFSET IF THE CARRY IS CLEAR
@@ -536,9 +540,9 @@ class _6502:
         self.SetSignal('C', self.IXY >= self.data)
     def DEC(self):#DECREMENT MEMORY. SUBTRACT ONE FROM A MEMORY LOCATION. WRITES BACK TO MEMORY.Z. N
         print("dec")
-        fetched =self.fetched
+       # fetched =self.fetched
         val = (self.data - 1) & 0xFF
-        self.write(val, fetched)
+        self.write(val, self.addr)
         self.SetSignal('Z', val== 0)
         self.SetSignal('N', (val & 0x80 != 0))
     def DEX(self): #DECREMENT X. SAME THING BUT FOR THE X REGISTER. Z, N
@@ -564,9 +568,9 @@ class _6502:
         self.AddCycle[1] = 1 #JUST LETTING THE CLOCK KNOW ABOUT POTENTIAL ADDITIONAL CYCLES ON ABX, ABY AND IZY
     def INC(self): #INCREMENT MEMORY. ADD ONE TO A MEMORY LOCATION. WRITES BACK TO MEMORY/ ACC. Z, N.
         print("inc")
-        fetched = self.fetched
+      #  fetched = self.fetched
         val = (self.data + 1) & 0xFF
-        self.write(val, fetched)
+        self.write(val, self.addr)
         self.SetSignal('Z', val== 0)
         self.SetSignal('N', (val & 0x80!= 0))
     def INX(self): #INCREMENT X. SAME THING BUT FOR THE X REGISTER. Z, N.
@@ -598,26 +602,26 @@ class _6502:
         self.SetSignal('N', self.ACC & 0x80 !=0)
         self.AddCycle[1] = 1 #JUST LETTING THE CLOCK KNOW ABOUT POTENTIAL ADDITIONAL CYCLES ON ABX, ABY AND IZY
     def LDX(self): #LOAD Y. LOADS self.data INTO Y. Z, N.
-        fetched =self.fetched
-        self.write(self.data,fetched, True)
+       # fetched =self.fetched
+        self.write(self.data,self.addr, True)
         self.SetSignal('Z', self.IXX == 0)
         self.SetSignal('N', self.IXX & 0x80 !=0)
         self.AddCycle[1] = 1 #JUST LETTING THE CLOCK KNOW ABOUT POTENTIAL ADDITIONAL CYCLES ON ABY
     def LDY(self): #LOAD Y. LOADS self.data INTO Y. Z, N.
-        fetched =self.fetched
-        self.write(self.data, fetched, False, True)
+      #  fetched =self.fetched
+        self.write(self.data, self.addr, False, True)
         self.SetSignal('Z', self.IXY == 0)
         self.SetSignal('N', self.IXY &0x80 != 0)
         self.AddCycle[1] = 1 #JUST LETTING THE CLOCK KNOW ABOUT POTENTIAL ADDITIONAL CYCLES ON ABX
     def LSR(self): #LOGICAL SHIFT TO THE RIGHT. WRITES BACK TO MEMORY/ACC. C, Z, N. Carry becomes bit 0
         print("lsr")
-        fetched =self.fetched
-        if fetched != -1:
+     #   fetched =self.fetched
+        if self.addr != -1:
             self.SetSignal('C', self.data & 0x01 != 0)
             self.SetSignal('N', False)
             self.data = (self.data >> 1) & 0xFF
             self.SetSignal('Z', self.data == 0)
-            self.write(self.data, fetched)
+            self.write(self.data, self.addr)
         else:
             self.SetSignal('C', self.ACC & 0x01 != 0)
             self.SetSignal('N', False)
@@ -656,8 +660,8 @@ class _6502:
     def ROL(self): #SHIFTS ACC/ADDR TO THE LEFT, BUT ACTS AS IF THE CARRY BIT IS BOTH BELOW BIT 0 AND ABOVE BIT 7. CARRY IS SHIFTED TO BIT 0, AND BIT 7 IS THEN...
         #SHIFTED TO CARRY. THIS INSTRUCTION WRITES BACK TO MEMORY/ACC. C, Z, N.
         print("rol")
-        fetched =self.fetched
-        if fetched != -1:
+      #  fetched =self.fetched
+        if self.addr != -1:
             temp = self.data
             self.data = (self.data << 1) & 0xFF
             if self.Flag['C']:
@@ -670,7 +674,7 @@ class _6502:
 
             self.SetSignal('N', self.data & 0x80 !=0)
             self.SetSignal('Z', self.data == 0)
-            self.write(self.data, fetched)
+            self.write(self.data, self.addr)
         else:
             temp = self.ACC
             self.ACC= (self.ACC << 1) & 0xFF
@@ -686,8 +690,8 @@ class _6502:
             self.SetSignal('Z', self.ACC == 0)
     def ROR(self): #SHIFTS ACC/ADDR TO THE RIGHT. SAME THING BUT THE OTHER WAY AROUND. C, Z, N.
         print("ror")
-        fetched =self.fetched
-        if fetched != -1:
+       # fetched =self.fetched
+        if self.addr != -1:
             temp = self.data
             self.data = (self.data >> 1) & 0xFF
             if self.Flag['C']:
@@ -700,7 +704,7 @@ class _6502:
 
             self.SetSignal('N', self.data & 0x80 !=0)
             self.SetSignal('Z', self.data == 0)
-            self.write(self.data, fetched)
+            self.write(self.data, self.addr)
         else:
             temp = self.ACC
             self.ACC = (self.ACC >> 1) & 0xFF
@@ -743,14 +747,14 @@ class _6502:
         self.SetSignal('I', True) #DELAYED ONE INSTRUCTION! IMPLEMENT THIS!
     def STA(self):
         print("eeeee")#STORE A. STORES ACC INTO MEMORY
-        fetched =self.fetched
-        self.write(self.ACC, fetched)
+      #  fetched =self.fetched
+        self.write(self.ACC, self.addr)
     def STX(self): #STORE X. STORES X INTO MEMORY
-        fetched =self.fetched
-        self.write(self.IXX, fetched)
+       # fetched =self.fetched
+        self.write(self.IXX, self.addr)
     def STY(self): #STORE Y. STORES Y INTO MEMORY
-        fetched =self.fetched
-        self.write(self.IXY, fetched)
+       # fetched =self.fetched
+        self.write(self.IXY, self.addr)
     def TAX(self): #TRANSFER A TO X. X == ACC
 
         self.IXX = self.ACC
@@ -786,6 +790,8 @@ class Bus:
             #EVERYTHING TALKS TO THE BUS, SO EVERYTHING NEEDS A REFERENCE TO THE BUS
         self.CPU = _6502(self) #CREATES A CPU OBJECT, PASSING THE BUS INTO IT
         self.RAM = bytearray(2048) #THE ACTUAL 2KB OF CPU RAM THAT EXISTS, WHICH OF COURSE ALSO CONNECTS TO THE BUS
+        with open("6502_functional_test.bin", "rb") as f:
+            self.RAM[:] = f.read() #setting RAM to a specific test ROM for testing purposes
     def read(self, address):
         address &= 0xFFFF
         #THIS READ FUNCTION NEEDS TO RETURN AN ADDRESS WITHIN WORKABLE RANGE TO THE DIFFERENT OBJECTS.
