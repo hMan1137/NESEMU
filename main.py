@@ -53,7 +53,7 @@ class _6502:
             0x8C: [self.STY, self.ABS, 3, 4], 0xAA: [self.TAX, self.IMP, 1, 2], 0xA8: [self.TAY, self.IMP, 1, 2], 0xBA: [self.TSX, self.IMP, 1, 2],
             0x8A: [self.TXA, self.IMP, 1, 2], 0x9A: [self.TXS, self.IMP, 1, 2], 0x98: [self.TYA, self.IMP, 1, 2],
         }
-
+        self.bus = bus
         self.ACC = 0
         self.IXX = 0
         self.IXY = 0
@@ -64,6 +64,8 @@ class _6502:
         #...IF THEY ARE SET THEY WILL BE TRUE, ELSE THEY WILL BE FALSE
         self.RAM = bytearray(65536) #RAM HAS A FULL ADDRESSABLE RANGE OF 64KB, SO BETWEEN 0x0000 and 0xFFFF. IT'S CHOPPED UP IN WEIRD WAYS THOUGH, LIKE THE FIRST TWO KB MIRROR THREE MORE TIMES
         self.data = 0x0000 #THE DATA AT THE ADDRESS BEING CHECKED, EXCEPT IT CERTAIN CASES WHERE ITS THE ACTUAL ADDRESS
+        self.addr = 0x0000 #THE ADDRESS AT WHICH THE DATA BE STORED
+        self.reladdr = 0x0000 #RELATIVE ADDRESSES ARE STORED SEPARATELY SINCE THEYRE MORE LIKE SIGNED OFFSETS AND THUS NEED TO BE TREATED ESPECIALLY
         with open("6502_functional_test.bin", "rb") as f:
             self.RAM[:] = f.read() #setting RAM to a specific test ROM for testing purposes
         self.PC = AssembleByte(self.RAM[0xFFFC], self.RAM[0xFFFD]) #THIS IS WHERE THE RESET POSITION FOR THE PC IS LOCATED. USUALLY IT'S EQUAL TO 0x8000 BUT ITS MORE...
@@ -79,20 +81,30 @@ class _6502:
 
     #FUNCTIONS THAT READ FROM AND WRITE TO THE ADDRESS
 
-    def read(self, mode):
-        address = mode()
+    def read(self, address, mode = None):
+        #address = mode()
+        #if mode == self.REL: # or mode == self.ABS or mode == self.ABX or mode == self.ABY or mode == self.ZP0 or mode == self.ZPX or mode == self.ZPY:
+         #   print("heyup")
+          #  self.data = address #HERE IT IS THE ADDRESS ITSELF
+
         #print(hex(address))
         #print(hex(self.RAM[address]))
-        if mode == self.REL: # or mode == self.ABS or mode == self.ABX or mode == self.ABY or mode == self.ZP0 or mode == self.ZPX or mode == self.ZPY:
-            print("heyup")
-            self.data = address #HERE IT IS THE ADDRESS ITSELF
-        else:
-            self.data = self.ACC if address == -1 else self.RAM[address]
+
+       # else:
+        #    if address == -1:
+         #       self.data = self.ACC
+          #  else:
+
+           #     address = self.bus.read(address)
+            #    self.data = address
+            #self.data = self.ACC if address == -1 else self.RAM[address]
             #print(self.data)
 
         #self.PC += 1
         self.JumpAddress = address
-        return address #RETURNING THE INDEX OF RAM WE CHECK AT FOR THE SAKE OF WRITING CHANGES DIRECTLY TO MEMORY
+        self.data = self.bus.read(address)
+        return self.bus.read(address)
+        #return address #RETURNING THE INDEX OF RAM WE CHECK AT FOR THE SAKE OF WRITING CHANGES DIRECTLY TO MEMORY
     def write(self, data, address, x = False, y = False):
        # Mode = self.UseMode(mode)
 
@@ -109,7 +121,8 @@ class _6502:
            self.ACC &= 0xFF
 
        else:
-           self.RAM[address] = data & 0xFF
+           self.bus.write(address, data)
+           #self.RAM[address] = data & 0xFF
     #WRITES AT THE CURRENT INDEX BEFORE THE PC INCREMENTS
 
     #OKAY, THIS IS IMPORTANT. WE NEED TO WORK ON ALL THE ADDRESSING MODES. THE NES HAS APPROXIMATELY ONE BAJILLION OF THEM
@@ -133,7 +146,8 @@ class _6502:
     # NEXT, WE'LL NEED A FUNCTION FOR FETCHING THE RELATIVE ADDRESS WHEN USING RELATIVE ADDRESSING, WHICH GETS THE ADDRESS BY ADDING AN OFFSET TO THE PC
 
     def GetByte(self, noINC = False):
-        val = self.RAM[self.PC]
+        #val = self.RAM[self.PC]
+        val = self.read(self.PC)
         if not noINC: #NEW CHANGE...
             self.PC += 1 #INCREMENTS PROGRAM COUNTER PER BYTE FETCHED, MORE CYCLE ACCURATE THAN THE PREVIOUS VERSION WHERE I WOULD INCREASE IT ALL AT ONCE AT THE END OF THE INSTRUCTION
         return val
@@ -146,7 +160,7 @@ class _6502:
         val = self.PC
         self.PC += 1
         #IMMEDIATE ADDRESSING, THE OPERAND IS THE NEXT BYTE
-        return val
+        self.addr = val
     def IND(self): #USED TO DEFERENCE FOR A JMP INSTRUCTION. IT JMPS TO THE ADDRESS FOUND ON THE ADDRESS FORMED BY THE NEXT TWO BYTES AND THE NEXT TWO BYTES PLUS 1
         lb = self.GetByte()
         hb = self.GetByte()
@@ -155,31 +169,31 @@ class _6502:
         highptr = self.RAM[(AssembleByte((lb + 1) & 0xFF, hb))] & 0xFF #DEREFERENCES FOR THE HIGH POINTER KEEPING THE BUG IN MIND. THE WRAP TO 0xFF MAKES IT READ FROM 0x00...
         #...FROM THE LOW BYTE DURING A PAGE CROSS
 
-        return AssembleByte(lowptr, highptr)
+        self.addr = AssembleByte(lowptr, highptr)
 
     def ABS(self): #ABSOLUTE ADDRESSING
-        return AssembleByte(self.GetByte(), self.GetByte())
+        self.addr = AssembleByte(self.GetByte(), self.GetByte())
 
     def ABX(self): #ABSOLUTE ADDRESSING WITH AN X REGISTER OFFSET
         val = AssembleByte(self.GetByte(), self.GetByte())
         if (val + self.IXX) & 0xFF00 != (val & 0xFF00):
             self.AddCycle[0] = 1 #PAGE BOUNDARY HAS BEEN CROSSED
-        return (val + self.IXX) & 0xFFFF
+        self.addr =  (val + self.IXX) & 0xFFFF
 
     def ABY(self): #ABSOLUTE ADDRESSING WITH A Y REGISTER OFFSET
         val = AssembleByte(self.GetByte(), self.GetByte())
         if (val + self.IXY) & 0xFF00 != (val & 0xFF00):
             self.AddCycle[0] = 1 #PAGE BOUNDARY HAS BEEN CROSSED
-        return (val + self.IXY) & 0xFFFF
+        self.addr =  (val + self.IXY) & 0xFFFF
 
     def IZX(self): #INDIRECT ZERO-PAGE ADDRESSING WITH X REGISTER OFFSET
-        return self.ZeroPage(self.GetByte() + self.IXX)
+        self.addr = self.ZeroPage(self.GetByte() + self.IXX)
 
     def IZY(self): #SAME THING WITH Y-OFFSET, EXCEPT ITS ACTUALLY THE FINAL ADDRESS THATS OFFSET FOR SOME REASON
         var = self.ZeroPage(self.GetByte())
         if (var + self.IXY) & 0xFF00 != (var & 0xFF00):
             self.AddCycle[0] = 1  #PAGE BOUNDARY HAS BEEN CROSSED
-        return (var + self.IXY) & 0xFFFF
+        self.addr = (var + self.IXY) & 0xFFFF
 
     def REL(self): #THIS ONES WEIRD...IT BASICALLY TAKES THE ADDRESS POINTED TO BY THE PC AND TURNS IT INTO A SIGNED OFFSET BETWEEN -128 AND 127
         #ALL WE NEED TO RETURN HERE IS THE BYTE CONVERTED TO SIGNED
@@ -190,18 +204,18 @@ class _6502:
             #if val & 0x80:
              #   val |= 0xFF00
 
-            return val - 0x100 if val & 0x80 else val #SUBTRACT 256 TO MAKE IT WRAP TO NEGATIVE
+            self.reladdr = val - 0x100 if val & 0x80 else val #SUBTRACT 256 TO MAKE IT WRAP TO NEGATIVE
 
         #else:
          #   return self.GetByte(1) #RETURN AS IS IF LESS THAN 128
     def ZP0(self): #THIS IS ONLY A ONE BYTE OPERAND SO I CANT JUST USE ZeroPage HERE, EXACT SAME PRINCIPLE THOUGH
-        return self.GetByte() & 0xFF
+        self.addr= self.GetByte() & 0xFF
 
     #THESE ARE THE SAME BUT WITH X AND Y OFFSET
     def ZPX(self):
-        return (self.GetByte() + self.IXX) & 0xFF
+        self.addr = (self.GetByte() + self.IXX) & 0xFF
     def ZPY(self):
-        return (self.GetByte() + self.IXY) & 0xFF
+        self.addr = (self.GetByte() + self.IXY) & 0xFF
 
 
     #AND NOW, WE SHALL DO ALL THE OPCODES. THERE'S 200-SOMETHING POSSIBLE OPCODE ENTRIES ON THE 6502, BUT THERE ARE ONLY ABOUT 151 LEGAL ONES ON THE NES (56 ARE ACTUALLY...
@@ -212,11 +226,14 @@ class _6502:
     #THIS GETS THE DATA WE'RE WORKING WITH FOR AN OPCODE
     def fetch(self):
 
-        opcode = self.RAM[self.PC]
+        opcode = self.read(self.PC)
         self.PC += 1
-        Mode = self.operations[opcode][1]
+        Mode = self.operations[opcode][1]()
       #  self.cycle = self.operations[opcode][3]
-        return self.read(Mode) #NOW THAT WE HAVE THE MODE, WE RUN IT THROUGH READ TO SET self.data TO THE OPERAND, THIS RETURNS THE RETURN INDEX OF INSTRUCTION
+        if Mode == -1: #AS IN WE'RE IN ACCUMULATOR MODE
+            return self.read(self.ACC)
+        else:
+            return self.read(self.addr) #NOW THAT WE HAVE THE MODE, WE RUN IT THROUGH READ TO SET self.data TO THE OPERAND, THIS RETURNS THE RETURN INDEX OF INSTRUCTION
    # def start(self): #A METHOD TO CALL WHEN STARTING THE EXECUTION OF AN INSTRUCTION.
     #    opcode = self.RAM[self.PC]
      #   if opcode not in list(self.operations.keys()):
@@ -230,7 +247,8 @@ class _6502:
             self.cycle -= 1
         #print("hi")
         elif self.cycle == 0:
-            opcode = self.RAM[self.PC]  # A FUNCTION TELLING THE CPU THAT ONE CLOCK CYCLE HAS PASSED. THIS IS THE HEART OF PROGRAM EXECUTION
+            #opcode = self.RAM[self.PC]  # A FUNCTION TELLING THE CPU THAT ONE CLOCK CYCLE HAS PASSED. THIS IS THE HEART OF PROGRAM EXECUTION
+            opcode = self.read(self.PC)
             self.SetSignal(1, True)
           #  self.cycle = self.operations[opcode][3]
             #self.cycle =1
@@ -405,24 +423,24 @@ class _6502:
 
         if not self.Flag['C']:  #BRANCH IF CARRY CLEAR. INCREMENTS THE PC BY 2, THEN ADDS THE RELATIVE OFFSET IF THE CARRY IS CLEAR
             self.AddCycle[1] = 1  # ADDS A CYCLE IF BRANCH IS FULL
-            if (self.PC + self.data) & 0xFF00 != (self.PC & 0xFF00): #A PAGE BOUNDARY HAS BEEN CROSSED
+            if (self.PC + self.reladdr) & 0xFF00 != (self.PC & 0xFF00): #A PAGE BOUNDARY HAS BEEN CROSSED
                 self.AddCycle[1] = 2 #ADDS TWO CYCLES INSTEAD
-            self.PC += self.data #THIS ONLY USES RELATIVE MODE, SO THE ADDRESS IS CONVERTED TO SIGNED BEFOREHAND (SEE REL())
+            self.PC += self.reladdr #THIS ONLY USES RELATIVE MODE, SO THE ADDRESS IS CONVERTED TO SIGNED BEFOREHAND (SEE REL())
 
     def BCS(self): #BRANCH IF CARRY SET. IDENTICAL TO BCC, JUST WITH THE CONDITION FLIPPED
 
         if self.Flag['C']:
             self.AddCycle[1] = 1  # ADDS A CYCLE IF BRANCH IS FULL
-            if (self.PC + self.data) & 0xFF00 != (self.PC & 0xFF00):  # A PAGE BOUNDARY HAS BEEN CROSSED
-                self.AddCycle[1] = 2 #ADDS TWO CYCLES INSTEAD
-            self.PC += self.data
+            if (self.PC + self.reladdr) & 0xFF00 != (self.PC & 0xFF00):  # A PAGE BOUNDARY HAS BEEN CROSSED
+                self.AddCycle[1] = 2  # ADDS TWO CYCLES INSTEAD
+            self.PC += self.reladdr  # THIS ONLY USES RELATIVE MODE, SO THE ADDRESS IS CONVERTED TO SIGNED BEFOREHAND (SEE REL())
     def BEQ(self):
          #BRANCH IF EQUAL. DOES THE SAME THING IF THE ZERO FLAG IS SET
         if self.Flag['Z']:
             self.AddCycle[1] = 1  # ADDS A CYCLE IF BRANCH IS FULL
-            if (self.PC + self.data) & 0xFF00 != (self.PC & 0xFF00): #A PAGE BOUNDARY HAS BEEN CROSSED
-                self.AddCycle[1] = 2 #ADDS TWO CYCLES INSTEAD
-            self.PC += self.data
+            if (self.PC + self.reladdr) & 0xFF00 != (self.PC & 0xFF00):  # A PAGE BOUNDARY HAS BEEN CROSSED
+                self.AddCycle[1] = 2  # ADDS TWO CYCLES INSTEAD
+            self.PC += self.reladdr  # THIS ONLY USES RELATIVE MODE, SO THE ADDRESS IS CONVERTED TO SIGNED BEFOREHAND (SEE REL())
     def BIT(self): #BIT TEST. Z,V, N. THIS OPERATION ONLY CHANGES FLAGS. IT PERFORMS A BITMASK OF ACC & ADDR, SETTING ZERO IF THE RESULT IS ZERO. V AND N ARE SIMPLY...
         #...THE VALUES OF BIT 6 AND 7 OF ADDR.
         print("bit")
@@ -434,28 +452,26 @@ class _6502:
 
         if self.Flag['N']:
             self.AddCycle[1] = 1  # ADDS A CYCLE IF BRANCH IS FULL
-            if (self.PC + self.data) & 0xFF00 != (self.PC & 0xFF00): #A PAGE BOUNDARY HAS BEEN CROSSED
-                self.AddCycle[1] = 2 #ADDS TWO CYCLES INSTEAD
-            self.PC += self.data
+            if (self.PC + self.reladdr) & 0xFF00 != (self.PC & 0xFF00):  # A PAGE BOUNDARY HAS BEEN CROSSED
+                self.AddCycle[1] = 2  # ADDS TWO CYCLES INSTEAD
+            self.PC += self.reladdr  # THIS ONLY USES RELATIVE MODE, SO THE ADDRESS IS CONVERTED TO SIGNED BEFOREHAND (SEE REL())
     def BNE(self): #BRANCH IF NOT EQUAL. (THE ZERO FLAG IS CLEAR)
 
         #print("hiiiiiiiiiiiiiii")
         if not self.Flag['Z']:
            # print("heyyyyy")
             self.AddCycle[1] = 1  # ADDS A CYCLE IF BRANCH IS FULL
-            if (self.PC + self.data) & 0xFF00 != (self.PC & 0xFF00): #A PAGE BOUNDARY HAS BEEN CROSSED
-                self.AddCycle[1] = 2 #ADDS TWO CYCLES INSTEAD
-            print(self.PC)
-            self.PC += self.data
-            print(self.PC)
+            if (self.PC + self.reladdr) & 0xFF00 != (self.PC & 0xFF00):  # A PAGE BOUNDARY HAS BEEN CROSSED
+                self.AddCycle[1] = 2  # ADDS TWO CYCLES INSTEAD
+            self.PC += self.reladdr  # THIS ONLY USES RELATIVE MODE, SO THE ADDRESS IS CONVERTED TO SIGNED BEFOREHAND (SEE REL())
 
     def BPL(self): #BRANCH IF PLUS. (THE NEGATIVE FLAG IS CLEAR)
 
         if not self.Flag['N']:
             self.AddCycle[1] = 1  # ADDS A CYCLE IF BRANCH IS FULL
-            if (self.PC + self.data) & 0xFF00 != (self.PC & 0xFF00): #A PAGE BOUNDARY HAS BEEN CROSSED
-                self.AddCycle[1] = 2 #ADDS TWO CYCLES INSTEAD
-            self.PC += self.data
+            if (self.PC + self.reladdr) & 0xFF00 != (self.PC & 0xFF00):  # A PAGE BOUNDARY HAS BEEN CROSSED
+                self.AddCycle[1] = 2  # ADDS TWO CYCLES INSTEAD
+            self.PC += self.reladdr  # THIS ONLY USES RELATIVE MODE, SO THE ADDRESS IS CONVERTED TO SIGNED BEFOREHAND (SEE REL())
     def BRK(self): #BREAK (ALSO KNOWN AS A SOFTWARE IRQ). I, B.
         #THIS ONE'S INTERESTING. WE PUSH THE INCREMENTED PROGRAM COUNTER TO THE STACK AND THEN PUSH ALL THE FLAGS TO THE STACK, AFTER WHICH WE SET THE PC TO A SPECIFIC VALUE
 
@@ -474,16 +490,16 @@ class _6502:
 
         if not self.Flag['V']:
             self.AddCycle[1] = 1  # ADDS A CYCLE IF BRANCH IS FULL
-            if (self.PC + self.data) & 0xFF00 != (self.PC & 0xFF00): #A PAGE BOUNDARY HAS BEEN CROSSED
-                self.AddCycle[1] = 2 #ADDS TWO CYCLES INSTEAD
-            self.PC += self.data
+            if (self.PC + self.reladdr) & 0xFF00 != (self.PC & 0xFF00):  # A PAGE BOUNDARY HAS BEEN CROSSED
+                self.AddCycle[1] = 2  # ADDS TWO CYCLES INSTEAD
+            self.PC += self.reladdr  # THIS ONLY USES RELATIVE MODE, SO THE ADDRESS IS CONVERTED TO SIGNED BEFOREHAND (SEE REL())
     def BVS(self): #BRANCH IF OVERFLOW SET
 
         if self.Flag['V']:
             self.AddCycle[1] = 1  # ADDS A CYCLE IF BRANCH IS FULL
-            if (self.PC + self.data) & 0xFF00 != (self.PC & 0xFF00): #A PAGE BOUNDARY HAS BEEN CROSSED
-                self.AddCycle[1] = 2 #ADDS TWO CYCLES INSTEAD
-            self.PC += self.data
+            if (self.PC + self.reladdr) & 0xFF00 != (self.PC & 0xFF00):  # A PAGE BOUNDARY HAS BEEN CROSSED
+                self.AddCycle[1] = 2  # ADDS TWO CYCLES INSTEAD
+            self.PC += self.reladdr  # THIS ONLY USES RELATIVE MODE, SO THE ADDRESS IS CONVERTED TO SIGNED BEFOREHAND (SEE REL())
     def CLC(self): #CLEAR THE CARRY. SELF EXPLANATORY
 
         self.SetSignal('C', False)
@@ -764,9 +780,48 @@ class _6502:
         self.ACC = self.IXY
         self.SetSignal('Z', self.ACC == 0)
         self.SetSignal('N', self.ACC & 0x80 != 0)
-cpu = _6502()
-cpu.PC = 0x0400
+
+class Bus:
+    def __init__(self):
+            #EVERYTHING TALKS TO THE BUS, SO EVERYTHING NEEDS A REFERENCE TO THE BUS
+        self.CPU = _6502(self) #CREATES A CPU OBJECT, PASSING THE BUS INTO IT
+        self.RAM = bytearray(2048) #THE ACTUAL 2KB OF CPU RAM THAT EXISTS, WHICH OF COURSE ALSO CONNECTS TO THE BUS
+    def read(self, address):
+        address &= 0xFFFF
+        #THIS READ FUNCTION NEEDS TO RETURN AN ADDRESS WITHIN WORKABLE RANGE TO THE DIFFERENT OBJECTS.
+        if 0x1FFF>= address >= 0x0000: #WITHIN FIRST 8KB
+            return self.RAM[address & 0x7FF] #MASK THE 8KB RANGE TO 2KB
+        elif 0x3FFF <= address <= 0x2000: #GONNA STUB THE PPU FOR NOW
+
+            return 0 #
+        elif 0x4017 >= address >= 0x4000: #APU AND I/O, STUB THIS FOR NOW TOO
+            return 0
+        elif address >= 0x4020: #CARTRIDGE SPACE. ALSO STUBBING THIS
+            return 0
+        else:
+            return -1
+    def write(self, address, data):
+        address &= 0xFFFF
+        # THIS READ FUNCTION NEEDS TO RETURN AN ADDRESS WITHIN WORKABLE RANGE TO THE DIFFERENT OBJECTS.
+        if 0x1FFF >= address >= 0x0000:  # WITHIN FIRST 8KB
+            self.RAM[address & 0x7FF] = data # MASK THE 8KB RANGE TO 2KB
+
+        #THESE WILL BE REPLACED WITH THEIR RESPECTIVE WRITE FUNCTIONS
+        elif 0x3FFF <= address <= 0x2000:  # GONNA STUB THE PPU FOR NOW
+
+            return 0  #
+        elif 0x4017 >= address >= 0x4000:  # APU AND I/O, STUB THIS FOR NOW TOO
+            return 0
+        elif address >= 0x4020:  # CARTRIDGE SPACE. ALSO STUBBING THIS
+            return 0
+        else:
+            return -1
+#cpu = _6502()
+#cpu.PC = 0x0400
 sleep= False
+bus = Bus()
+cpu = bus.CPU
+cpu.PC = 0x0400
 with open('log.txt', 'r') as f:
     while True:
 
@@ -800,19 +855,3 @@ with open('log.txt', 'r') as f:
     #THE IMPORTANT THING, OF COURSE, IS THAT NOW THE CPU DOES NOT TALK DIRECTLY TO RAM. ALL OF THESE DEVICES CONNECT TO THE BUS AND THE BUS LETS THEM TALK TO EACH OTHER...
     #...THROUGH IT. THIS MEANS WE NEED A SEPARATE BUS CLASS THAT PERFORMS READS AND WRITES FOR OUR CARTRIDGE AND PPU
 
-class Bus:
-    def __init__(self):
-            #EVERYTHING TALKS TO THE BUS, SO EVERYTHING NEEDS A REFERENCE TO THE BUS
-        self._6502 = _6502(self) #CREATES A CPU OBJECT, PASSING THE BUS INTO IT
-        self.RAM = bytearray(2048) #THE ACTUAL 2KB OF CPU RAM THAT EXISTS, WHICH OF COURSE ALSO CONNECTS TO THE BUS
-    def read(self, address):
-        #THIS READ FUNCTION NEEDS TO RETURN AN ADDRESS WITHIN WORKABLE RANGE TO THE DIFFERENT OBJECTS.
-        if 0x1FFF>= address >= 0x0000: #WITHIN FIRST 8KB
-            return self.RAM[address & 0x7FF] #MASK THE 8KB RANGE TO 2KB
-        elif 0x3FFF <= address <= 0x2000: #GONNA STUB THE PPU FOR NOW
-
-            return 0 #
-        elif 0x4000 >= address >= 0x4017: #APU AND I/O, STUB THIS FOR NOW TOO
-            return 0
-        elif address >= 0x4020: #CARTRIDGE SPACE. ALSO STUBBING THIS
-            return 0
