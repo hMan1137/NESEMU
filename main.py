@@ -589,12 +589,12 @@ class _6502:
 
     def JMP(self): #JUMP. PROGRAM COUNTER IS EQUAL TO THE self.data.
 
-        self.PC = self.JumpAddress
+        self.PC = self.addr
     def JSR(self): #JUMP TO SUBROUTINE. PUSHES CURRENT PC TO STACK THEN SETS IT TO self.data. USED WHEN YOU WANT TO BE ABLE TO GO BACK FROM WHERE YOU JUMPED.
 
         self.Push(((self.PC - 1)>> 8)& 0xFF) #THE WAY THE EMULATOR IS DESIGNED,THE PC ALREADY INCREMENTS PAST THE OPERAND, SO IT GOES UP ONE ABOVE THE VALUE WE WANT (INITIAL PC + 2)
         self.Push((self.PC -1) & 0xFF)
-        self.PC = self.JumpAddress
+        self.PC = self.addr
     def LDA(self): #LOAD A. LOADS self.data INTO ACC. Z, N.
 
         self.ACC = self.data & 0xFF
@@ -808,7 +808,7 @@ class Bus:
             return -1
     def write(self, address, data):
         address &= 0xFFFF
-        # THIS READ FUNCTION NEEDS TO RETURN AN ADDRESS WITHIN WORKABLE RANGE TO THE DIFFERENT OBJECTS.
+        # SAME THING BUT WE'RE SETTING NOT GETTING
         if 0x1FFF >= address >= 0x0000:  # WITHIN FIRST 8KB
             self.RAM[address & 0x7FF] = data # MASK THE 8KB RANGE TO 2KB
 
